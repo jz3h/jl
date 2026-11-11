@@ -291,6 +291,7 @@ function renderPlano(){
    '<label class="fld"><span>Ocasião</span><select id="as-oc">'+opts(AT.OCASIOES,'consultorio')+'</select></label>'+
    '<div class="barra"><button class="btn" data-act="as-propor">Propor plano</button></div><div id="as-out" aria-live="polite">'+(A?assOut(A):'')+'</div></div>';
   $('#tab-plano').innerHTML='<h2>Plano de produção</h2>'+ass+
+   (pl.itens.length?(pl.kit.economia>0?'<div class="alerta ok">'+icon('ok')+'<div>Folha-kit: junta as sobras de peças da mesma linha e papel e economiza '+pl.kit.economia+' '+(pl.kit.economia===1?'folha':'folhas')+'.</div></div>':'<div class="alerta info">'+icon('info')+'<div>Folha-kit: não economiza nenhuma folha neste plano. Cada peça sai da sua própria folha.</div></div>'):'')+
    '<div class="kpis"><div class="kpi"><b>'+pl.folhasTotal+'</b><span>folhas a imprimir</span></div><div class="kpi"><b>'+pl.cortes.total+'</b><span>cortes no total</span></div><div class="kpi"><b>'+pl.itens.length+'</b><span>peças no plano</span></div><div class="kpi"><b>'+st.config.pilha+'</b><span>folhas por pilha</span></div></div>'+
    '<div class="card res"><h3>Peças e quantidades</h3><table class="tbl resp"><thead><tr><th>Peça</th><th>Quantidade</th><th>Papel</th><th class="num">Por folha</th><th class="num">Folhas</th><th></th></tr></thead><tbody>'+itensRows+'</tbody></table>'+
    '<div class="barra"><button class="btn sec" data-act="item-add">Adicionar peça</button><button class="btn perigo" data-act="plano-limpar">Limpar plano</button></div></div>'+
@@ -319,7 +320,7 @@ function roteiroHtml(cuts,pilha){
 }
 function kitSel(){
   const L=AT.LINHAS[selKit.linha];
-  const ids=Object.keys(L.pecas).filter(id=>{const b=AT.pecaDef(id);return b.papeis.includes(selKit.papel)&&selKit.papel!=='metal'&&!b.manta&&!b.fold;});
+  const ids=Object.keys(L.pecas).filter(id=>{const b=AT.pecaDef(id);return b.papeis.includes(selKit.papel)&&selKit.papel!=='metal'&&!b.manta;});
   const itens=ids.map((id,i)=>({idx:i,c:AT.efetivaPapel(st,id,selKit.papel),n:L.pecas[id]}));
   const units=[];itens.forEach(it=>{for(let i=0;i<it.n;i++)units.push({k:it.c.id,pecaId:it.c.id,idx:it.idx,w:it.c.w,h:it.c.h,variant:(it.c.base.variantes||[null])[i%((it.c.base.variantes||[1]).length)]});});
   let packed=[];

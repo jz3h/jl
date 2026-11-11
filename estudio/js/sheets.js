@@ -93,15 +93,16 @@ AT.sheetArte=function(st,c,o){
 
 /* folha-kit: peças diferentes de uma mesma linha e papel numa folha só */
 AT.sheetKit=function(st,plano,kf){
-  const cfg=st.config,m=cfg.margem,warn=[],cache={},fcache={};
+  const cfg=st.config,m=cfg.margem,warn=[],cache={},fcache={},folds=[];
   let cellsHtml='';
   kf.cells.forEach(cl=>{
     const it=plano.itens.find(x=>x.idx===cl.idx);
     cellsHtml+=cellHtml(cl,it.c,cache,warn,{w:cl.w,h:cl.h});
+    foldsOf(it.c,[cl]).forEach(f=>{if(!folds.some(x=>x.dir===f.dir&&x.pos===f.pos))folds.push(f);});
   });
   kf.fill.forEach(cl=>{cellsHtml+=cellHtml(cl,AT.efetivaPapel(st,cl.pecaId,kf.paper),fcache,warn,{w:cl.w,h:cl.h});});
   const all=kf.cells.concat(kf.fill);
-  const info={pecaId:'kit',nome:'Folha-kit',papel:kf.paper,kind:'kit',m,cuts:kf.cuts,folds:[],cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:false,fill:!!x.fill,pecaId:x.pecaId})),bbox:bboxOf(all),count:kf.cells.length,nFill:kf.fill.length};
+  const info={pecaId:'kit',nome:'Folha-kit',papel:kf.paper,kind:'kit',m,cuts:kf.cuts,folds:folds,cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:false,fill:!!x.fill,pecaId:x.pecaId})),bbox:bboxOf(all),count:kf.cells.length,nFill:kf.fill.length};
   const html='<section class="sheet" data-paper="'+kf.paper+'" data-peca="kit" data-kind="kit">'+cellsHtml+AT.marksSvg(info,{guides:cfg.guias})+'</section>';
   return {html,info,warn};
 };

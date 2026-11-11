@@ -199,8 +199,8 @@ def({id:'ima_telefones',nome:'Ímã de telefones',w:90,h:60,papeis:['matte'],pap
   const c=X.c,q=c.qr?X.qrCap(22):null,lw=X.cw-(q?q.w+3:0);
   const ti=X.t(c.frase,{w:lw,h:4,max:8,min:8,weight:800,color:X.ink.a,ls:1});
   const idr=X.id(X.cw,{tel:false});
-  const tel='<div style="font:800 14pt/1 '+X.fam+';color:'+X.ink.a+';white-space:nowrap">'+TEL+'</div>';
-  const left=X.col(ti.html+'<div style="display:flex;flex-direction:column;gap:1.3mm;margin-top:1.4mm">'+X.tels({big:16,pt:8.5})+'</div>','width:'+lw+'mm');
+  const tel='<div style="font:800 18pt/1 '+X.fam+';color:'+X.ink.a+';white-space:nowrap">'+TEL+'</div>';
+  const left=X.col(ti.html+'<div style="display:flex;flex-direction:column;gap:2.4mm;margin-top:2.4mm">'+X.tels({big:21,pt:10.5})+'</div>','width:'+lw+'mm');
   return '<div style="display:flex;gap:3mm">'+left+(q?'<div style="margin-left:auto">'+q.html+'</div>':'')+'</div><div style="margin-top:auto;border-top:0.4mm solid '+X.ink.a+';padding-top:1.2mm">'+
    '<div style="font:700 8pt/1.1 '+X.fam+';color:'+X.ink.t+'">'+esc(c.sub)+'</div>'+tel+'<div style="height:1mm"></div>'+idr.html+'</div>';
  }});
@@ -211,15 +211,15 @@ function longa(X,o){
   const idr=X.id(X.cw);
   const e=X.endereco(X.cw-(q?big:0)-4,o.body);
   const head='<div style="display:flex;align-items:center;gap:3mm;margin-bottom:'+o.g+'mm">'+X.sym(o.sym)+X.t('Medicina de família · Porto Alegre',{w:X.cw-X.symW(o.sym)-4,h:9,max:o.body,min:X.mn.rotulo,weight:800,color:X.ink.b,ls:1}).html+'</div>';
-  const li=(c.linhas||[]).filter(Boolean).map(l=>{const r=X.t(l,{w:X.cw-5,h:o.lh,max:o.body+1,min:X.body,weight:600,lh:1.25});return '<div style="display:flex;gap:2.4mm;margin-top:1.6mm"><span style="flex:none;width:1.8mm;height:1.8mm;border-radius:50%;background:'+X.ink.a+';margin-top:'+(r.pt*PT*0.5)+'mm"></span>'+r.html+'</div>';}).join('');
+  const li=(c.linhas||[]).filter(Boolean).map(l=>{const r=X.t(l,{w:X.cw-5,h:o.lh*1.6,max:o.body+(o.big>30?3:1.5),min:X.body,weight:600,lh:1.25});return '<div style="display:flex;gap:2.4mm;margin-top:'+(o.big>30?3.4:2.4)+'mm"><span style="flex:none;width:1.8mm;height:1.8mm;border-radius:50%;background:'+X.ink.a+';margin-top:'+(r.pt*PT*0.5)+'mm"></span>'+r.html+'</div>';}).join('');
   const sos='<div style="font:700 '+o.body+'pt/1.2 '+X.fam+';color:'+X.ink.b+';margin-top:2mm">Em emergência, ligue 192 (SAMU).</div>';
   const qrb='<div style="display:flex;align-items:flex-start;gap:4mm;border-top:0.5mm solid '+X.ink.a+';padding-top:3mm;margin-top:auto">'+(q?q.html:'')+
    '<div style="flex:1;min-width:0">'+X.t('Aponte a câmera e agende',{w:X.cw-(q?big:0)-4,h:14,max:o.body+3,min:X.body,weight:800,color:X.ink.a}).html+'<div style="font:800 '+(o.body+5)+'pt/1.2 '+X.fam+';color:'+X.ink.t+';margin-top:1mm;white-space:nowrap">'+TEL+'</div><div style="margin-top:1.5mm">'+e.html+'</div></div></div>';
   const used=o.sym+o.g+(q?big+1+o.capH:0)+idr.h+o.body*0.7+16;
   const fixed=idr.h+(c.qr?big+o.capH+8:30)+o.sym+o.g+o.body*1.2*PT*2+8;
   const room=X.ch-fixed;
-  const fr=X.t(c.frase,{w:X.cw,h:Math.max(room*0.38,o.fmin*1.1*PT*2),max:o.fmax,min:o.fmin,weight:800,lh:1.05,mb:o.g});
-  const su=c.sub?X.t(c.sub,{w:X.cw,h:Math.max(room*0.28,o.sh),max:o.body+1.5,min:X.body,weight:500,lh:1.32}).html:'';
+  const fr=X.t(c.frase,{w:X.cw,h:Math.max(room*0.42,o.fmin*1.1*PT*2),max:o.fmax,min:o.fmin,weight:800,lh:1.05,mb:o.g});
+  const su=c.sub?X.t(c.sub,{w:X.cw,h:Math.max(room*0.28,o.sh),max:o.body+(o.big>30?4:2.5),min:X.body,weight:500,lh:1.34}).html:'';
   return head+fr.html+su+'<div style="margin-top:1mm">'+li+'</div>'+qrb+'<div style="margin-top:2.5mm">'+idr.html+'</div>'+sos;
 }
 def({id:'panfleto_a5',temEndereco:true,nome:'Panfleto A5',w:148,h:210,papeis:['matte','verge','kraft'],papel:'matte',idLongo:true,fraseLivre:true,
@@ -227,13 +227,13 @@ def({id:'panfleto_a5',temEndereco:true,nome:'Panfleto A5',w:148,h:210,papeis:['m
  sub:'O médico de família acompanha a mesma pessoa ao longo dos anos. Conhece a história, os remédios e a casa de quem atende.',
  linhas:['Crianças, adultos e idosos no mesmo consultório','Revisão da lista de remédios','Acompanhamento de pressão, diabetes e outras condições de longo prazo','Prevenção sem exame desnecessário'],
  porque:'Explica em quatro linhas o que faz um médico de família e leva ao agendamento.',
- render(X){return longa(X,{big:34,cap:12,capH:8,fmax:34,fmin:20,g:3,sh:20,lh:16,body:12,sym:17});}});
+ render(X){return longa(X,{big:34,cap:12,capH:8,fmax:44,fmin:20,g:4,sh:20,lh:16,body:12,sym:24});}});
 def({id:'folheto_a6',temEndereco:true,nome:'Folheto A6',w:105,h:148,papeis:['matte','verge','kraft'],papel:'matte',idLongo:true,fraseLivre:true,
  frase:'Um médico para a família inteira.',
  sub:'O médico de família acompanha a mesma pessoa ao longo dos anos.',
  linhas:['Crianças, adultos e idosos no mesmo consultório','Revisão da lista de remédios','Prevenção sem exame desnecessário'],
  porque:'Versão de bolso do panfleto, boa para balcões e farmácias parceiras.',
- render(X){return longa(X,{big:26,cap:8,capH:6,fmax:24,fmin:14,g:2.5,sh:14,lh:12,body:9,sym:12});}});
+ render(X){return longa(X,{big:26,cap:8,capH:6,fmax:28,fmin:14,g:3,sh:14,lh:12,body:9,sym:16});}});
 
 def({id:'diario_a5',nome:'Diário da pressão',w:148,h:210,papeis:['matte','verge'],papel:'matte',
  frase:'Diário da pressão',sub:'Anote e traga na consulta.',linhas:['Dia','Manhã','Noite','Como eu estava'],
@@ -398,13 +398,13 @@ def({id:'cartao_cuidador',nome:'Cartão do cuidador',w:105,h:148,papeis:['matte'
  porque:'Quem reveza no cuidado encontra tudo em um cartão: contatos e rotina.',
  render(X){
   const c=X.c,L=c.linhas||[],q=c.qr?X.qrCap(20,{pt:8}):null;
-  const ti=X.t(c.frase,{w:X.cw,h:12,max:19,min:13,weight:800,color:X.ink.a});
-  const su=X.t(c.sub||'',{w:X.cw,h:9,max:10,min:9,weight:500,mt:1});
+  const ti=X.t(c.frase,{w:X.cw,h:14,max:24,min:13,weight:800,color:X.ink.a});
+  const su=X.t(c.sub||'',{w:X.cw,h:9,max:11,min:9,weight:500,mt:1});
   const sec=(t)=>'<div style="font:800 8pt/1 '+X.fam+';color:'+X.ink.b+';text-transform:uppercase;letter-spacing:.08em;margin:3mm 0 .4mm">'+t+'</div>';
-  const f=l=>X.field(l,{h:9.5,pt:8});
+  const f=l=>X.field(l,{h:10.5,pt:8.5});
   const tels='<div style="font:800 8pt/1.2 '+X.fam+';color:'+X.ink.b+';white-space:nowrap;margin-top:3mm">SAMU 192 · CVV 188 · Bombeiros 193</div>';
   const idr=X.id(X.cw-(q?q.w+3:0));
-  return '<div style="margin-bottom:1.5mm">'+X.sym(9)+'</div>'+ti.html+su.html+sec('Contatos')+L.slice(0,3).map(f).join('')+sec('Rotina')+L.slice(3,6).map(f).join('')+tels+
+  return '<div style="margin-bottom:2mm">'+X.sym(14)+'</div>'+ti.html+su.html+sec('Contatos')+L.slice(0,3).map(f).join('')+sec('Rotina')+L.slice(3,6).map(f).join('')+tels+
    '<div style="margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:3mm"><div>'+idr.html+'</div>'+(q?q.html:'')+'</div>';
  }});
 

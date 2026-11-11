@@ -191,7 +191,7 @@ AT._finalizaPlano=function(st,res,need,add,pilha,m){
   res.kit={folhas:[],economia:0,detalhe:[]};
   const grupos={};
   res.itens.forEach(o=>{
-    if(!o.fit||o.papel==='metal'||o.c.base.manta||o.c.base.fold||o.printPaper==='comum')return;
+    if(!o.fit||o.papel==='metal'||o.c.base.manta||o.printPaper==='comum')return;
     const full=Math.floor(o.qtd/o.perSheet),rem=o.qtd-full*o.perSheet;
     if(rem<=0)return;
     const k=o.printPaper+'|'+AT.linhaDe(o.pecaId)+'|'+o.c.fonte+o.c.tinta;
