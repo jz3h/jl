@@ -21,25 +21,25 @@ function escolhe(list){
 
 /* a jogada de cada público (texto de apoio vem da pesquisa; frases são sugestões para revisar) */
 AT.JOGADAS={
- familias:{quem:'Famílias que moram perto e querem um médico que conheça a casa toda.',busca:'Termos de busca na cidade: "médico de família porto alegre", "clínico geral particular", "médico que atende em casa".',linha:'casa',
+ familias:{quem:'Famílias que moram perto e querem um médico que conheça a casa toda.',busca:'Termos de busca na cidade: "médico de família porto alegre", "clínico geral particular", "médico que atende em casa".',linha:'m_casa',
   gesto:'Entregar em mãos com uma frase, ou incluir no kit Casa.',frase:'Deixei aqui os telefones de emergência para a sua casa. Pode ficar na geladeira.',
   base:'O ímã e o cartão de emergência dão um motivo para guardar a peça. Pesquisa, seção 1.9 (ICE).'},
- idosos:{quem:'Idosos e quem cuida deles.',busca:'Termos de busca: "médico idoso atendimento domiciliar porto alegre". No mapa só aparecem agências de cuidadores e home care, nenhum consultório médico.',linha:'cuidador',
+ idosos:{quem:'Idosos e quem cuida deles.',busca:'Termos de busca: "médico idoso atendimento domiciliar porto alegre". No mapa só aparecem agências de cuidadores e home care, nenhum consultório médico.',linha:'primeiro_contato',
   gesto:'Entregar em mãos com uma frase e incluir o cartão do cuidador no kit.',frase:'Este cartão guarda os contatos e a rotina de quem você cuida. Pode levar à consulta.',
   base:'Cartão de lista de remédios na carteira: estudo piloto pequeno, sem prova de efeito. Pesquisa, seção 1.6.'},
- jovens:{quem:'Adultos jovens, no notebook, no café e na fila.',busca:'Termos de busca ligados: "médico saúde mental porto alegre particular", "médico lgbt porto alegre".',linha:'trabalho',
+ jovens:{quem:'Adultos jovens, no notebook, no café e na fila.',busca:'Termos de busca ligados: "médico saúde mental porto alegre particular", "médico lgbt porto alegre".',linha:'chaveiro',
   gesto:'Deixar no balcão com autorização (café, livraria) e entregar o adesivo em mãos.',frase:'Uma frase para a mesa e um QR para falar comigo no WhatsApp, se um dia precisar.',
   base:'Adesivo de vinil com frase curta. Adaptação do caso da escada, que mediu escolha da escada, não saúde. Pesquisa, seção 1.1.'},
- sobrecarregados:{quem:'Quem trabalha demais e não tem tempo de procurar médico.',busca:'Termos de busca ligados: "médico dor lombar porto alegre", "médico dor crônica porto alegre", "médico saúde mental porto alegre particular".',linha:'trabalho',
+ sobrecarregados:{quem:'Quem trabalha demais e não tem tempo de procurar médico.',busca:'Termos de busca ligados: "médico dor lombar porto alegre", "médico dor crônica porto alegre", "médico saúde mental porto alegre particular".',linha:'primeiro_contato',
   gesto:'Deixar no balcão com autorização (coworking, café) e incluir o marcador na mesa.',frase:'Pausa curta: o QR leva ao meu contato, sem compromisso.',
   base:'Horários fora do expediente e agendamento online: evidência fraca, mas é o que o QR resolve. Pesquisa, tática 10.'},
- polimedicados:{quem:'Quem toma muitos remédios e tem vários médicos.',busca:'Termo de busca: "desprescrição médico porto alegre". Nenhum médico da cidade ocupa o termo.',linha:'cuidador',
+ polimedicados:{quem:'Quem toma muitos remédios e tem vários médicos.',busca:'Termo de busca: "desprescrição médico porto alegre". Nenhum médico da cidade ocupa o termo.',linha:'primeiro_contato',
   gesto:'Entregar em mãos com uma frase e incluir a lista de remédios no kit.',frase:'Este é um modelo de cartão para reunir seus remédios num lugar só. Traga na consulta.',
   base:'Cuidado com porta-comprimidos em idosos: ensaio pequeno achou eventos adversos. As etiquetas só marcam o horário da caixa. Pesquisa, seção 1.8.'},
- colegas:{quem:'Colegas médicos e clínicas que podem encaminhar.',busca:'Sem termo de busca: o canal é a visita e a devolutiva rápida ao colega que encaminhou (tática 7, evidência fraca a moderada).',linha:'colega',
+ colegas:{quem:'Colegas médicos e clínicas que podem encaminhar.',busca:'Sem termo de busca: o canal é a visita e a devolutiva rápida ao colega que encaminhou (tática 7, evidência fraca a moderada).',linha:'m_balcao',
   gesto:'Entregar em mãos numa visita e incluir o kit de colegas com os cartões de encaminhamento.',frase:'Sou médico de família. Se aparecer um caso que peça alguém para juntar as pontas, fale direto comigo.',
   base:'Nada de pagamento ou vantagem por paciente encaminhado (CEM, art. 59). Veja a tabela de Parcerias.'},
- parceiros:{quem:'Balcões de parceiros: farmácias, pilates, cafés, livrarias.',busca:'Sem termo de busca: a pessoa já está esperando no local.',linha:'balcao',
+ parceiros:{quem:'Balcões de parceiros: farmácias, pilates, cafés, livrarias.',busca:'Sem termo de busca: a pessoa já está esperando no local.',linha:'m_balcao',
   gesto:'Deixar no balcão com autorização do responsável, sempre pedindo antes.',frase:'Posso deixar este display no balcão, se vocês autorizarem?',
   base:'Farmácia é zona cinzenta (deixar material) e tem itens vedados. Leia a tabela de Parcerias antes de ir.'}
 };
@@ -63,28 +63,26 @@ AT.TEXTO_AVALIACAO='Olá! Foi um prazer cuidar de você. Se puder, deixe uma ava
 /* semana tipo: quantidades calculadas do inventário atual */
 AT.semanaTipo=function(st){
   const mk=(linha,want,extra)=>{try{return AT.maxKits(st,linha,want,extra);}catch(e){return {kits:0,limitado:true};}};
-  const colegas=mk('colega',5),familia=mk('casa',5),balcao=mk('balcao',3);
-  const ima=[{pecaId:'ima_telefones',qtd:10}];
-  const rua=mk('rua',20,ima);
+  const colegas=mk('primeiro_contato',5),familia=mk('m_casa',5),balcao=mk('m_balcao',3);
+  const rua=mk('chaveiro',10),fim=mk('fim_de_ano',5);
   const pe=(l,k,m)=>{const L=AT.LINHAS[l];return Object.entries(L.pecas).map(([id,q])=>({id,nome:AT.pecaDef(id).nome,qtd:q*k}));};
   const sem=[
    {id:'s1',titulo:'Semana 1: colegas, família e avaliações',itens:[
-     {id:'s1a',txt:'Kits para colegas',pecas:pe('colega',colegas.kits),kits:colegas.kits,lim:colegas.limitado,pedido:5},
-     {id:'s1b',txt:'Kits para a família e amigos próximos',pecas:pe('casa',familia.kits),kits:familia.kits,lim:familia.limitado,pedido:5},
+     {id:'s1a',txt:'Kits para colegas',pecas:pe('primeiro_contato',colegas.kits),kits:colegas.kits,lim:colegas.limitado,pedido:5},
+     {id:'s1b',txt:'Kits para a família e amigos próximos',pecas:pe('m_casa',familia.kits),kits:familia.kits,lim:familia.limitado,pedido:5},
      {id:'s1c',txt:'Enviar o pedido de avaliação no Google a quem você atendeu (texto no topo da aba)',pecas:[]}]},
    {id:'s2',titulo:'Semana 2: parceiros de balcão',itens:[
-     {id:'s2a',txt:'Display com cartões e tags em farmácias, pilates e cafés. Peça autorização antes e leia a tabela de Parcerias.',pecas:pe('balcao',balcao.kits),kits:balcao.kits,lim:balcao.limitado,pedido:3}]},
+     {id:'s2a',txt:'Display com folheto, série A6 e cartões em farmácias, pilates e cafés. Peça autorização antes e leia a tabela de Parcerias.',pecas:pe('m_balcao',balcao.kits),kits:balcao.kits,lim:balcao.limitado,pedido:3}]},
    {id:'s3',titulo:'Semana 3: feira e parque',itens:[
-     {id:'s3a',txt:'Panfleto, cartão e adesivo em mãos, com uma frase',pecas:pe('rua',rua.kits),kits:rua.kits,lim:rua.limitado,pedido:20},
-     {id:'s3b',txt:'Ímãs de telefones para quem aceitar conversar',pecas:[{id:'ima_telefones',nome:AT.pecaDef('ima_telefones').nome,qtd:10}]}]},
+     {id:'s3a',txt:'Chaveiro-tag e cartão em mãos, com uma frase',pecas:pe('chaveiro',rua.kits),kits:rua.kits,lim:rua.limitado,pedido:20},
+     {id:'s3b',txt:'Tag, marcador e ímã calendário de fim de ano para quem aceitar conversar',pecas:pe('fim_de_ano',fim.kits),kits:fim.kits,lim:fim.limitado,pedido:5}]},
    {id:'s4',titulo:'Semana 4: revisão e reposição',itens:[
      {id:'s4a',txt:'Abrir o Placar, somar as mensagens e as consultas e ver o que repetir',pecas:[]},
      {id:'s4b',txt:'Repor o que ficou abaixo do estoque mínimo',pecas:[]}]}
   ];
   /* estoque do plano das semanas 1 a 3 */
   const itens=[];
-  [colegas&&['colega',colegas.kits],['casa',familia.kits],['balcao',balcao.kits],['rua',rua.kits]].forEach(a=>{if(a&&a[1]>0)AT.itensDaLinha(a[0],a[1]).forEach(i=>itens.push(i));});
-  itens.push(ima[0]);
+  [colegas&&['primeiro_contato',colegas.kits],['m_casa',familia.kits],['m_balcao',balcao.kits],['chaveiro',rua.kits],['fim_de_ano',fim.kits]].forEach(a=>{if(a&&a[1]>0)AT.itensDaLinha(a[0],a[1]).forEach(i=>itens.push(i));});
   const tmp=JSON.parse(JSON.stringify(st));tmp.plano={itens};
   let repor=[];
   try{const r=AT.calcPlano(tmp);repor=Object.values(r.papel).filter(p=>p.falta||p.baixo).map(p=>({nome:p.nome,saldo:p.saldo,min:p.min,falta:p.falta}));}catch(e){}

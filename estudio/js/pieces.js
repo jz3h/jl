@@ -425,6 +425,7 @@ AT.PECAS=P;
 AT.renderPiece=function(c,o){
   o=o||{};
   const w=o.w||c.w,h=o.h||c.h;
+  if(c.base.marca)return AT.renderMarca(c,Object.assign({},o,{w,h}));
   const X=makeX(c,w,h,o.variant);
   const raw=c.base.raw;
   const body=c.base.render(X);
@@ -435,6 +436,7 @@ AT.renderPiece=function(c,o){
 };
 /* confere se algo passa da zona segura (em mm) */
 AT.checkOverflow=function(pcEl,w,h){
+  if(pcEl.dataset&&pcEl.dataset.marca)return AT.checkMarca(pcEl,w,h);
   const issues=[],r0=pcEl.getBoundingClientRect(),k=r0.width/w;
   const tol=0.2;
   pcEl.querySelectorAll('*').forEach(el=>{

@@ -7,15 +7,15 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const KEY='atelie.v1', PX=96/25.4;
 const fmt=AT.fmt;
 let verPapel=null,pvReal=false,selFolhaModo='peca',selKit={linha:'casa',papel:'matte'};
-let st, tab='inventario', selPeca='cartao', selLinha='casa', selFolha={pecaId:'cartao',papel:null}, printSel={papel:null,single:null}, saveT=null, lastPrint=null;
+let st, tab='inventario', selPeca='m_cartao', selLinha='primeiro_contato', selFolha={pecaId:'m_cartao',papel:null}, printSel={papel:null,single:null}, saveT=null, lastPrint=null;
 const ART={verge:'o vergê',kraft:'o kraft',matte:'o matte',vinil:'o vinil',comum:'o papel comum',metal:'o azul metálico'};
 
 /* ---------- estado ---------- */
 function defaults(){
   const s={v:1,inventario:clone(AT.INV_PADRAO),
-   config:{margem:6,guias:false,pilha:6,borda:3,fonte:'jakarta',simbolo:'flower_of_life',tinta:'azul'},
-   pecas:{},plano:{itens:[]},linhaAtiva:'casa',kits:10,linhasCfg:{},distrib:{},check:{},estrategia:{check:{},placar:{},link:'',pub:'',bairro:''}};
-  s.plano.itens=AT.itensDaLinha('casa',10);
+   config:{margem:3.5,guias:false,pilha:6,borda:3,fonte:'jakarta',simbolo:'flower_of_life',tinta:'azul',marca:Object.assign({},AT.MARCA_PADRAO)},
+   pecas:{},plano:{itens:[]},linhaAtiva:'m_casa',kits:10,linhasCfg:{},distrib:{},check:{},estrategia:{check:{},placar:{},link:'',pub:'',bairro:''}};
+  s.plano.itens=AT.itensDaLinha('m_casa',10);
   return s;
 }
 function merge(base,o){
@@ -25,6 +25,7 @@ function merge(base,o){
     const m={};o.inventario.forEach(i=>{m[i.id]=i;});
     base.inventario=base.inventario.map(d=>m[d.id]?Object.assign({},d,{qtd:m[d.id].qtd==null||m[d.id].qtd===''?null:Number(m[d.id].qtd),min:m[d.id].min==null||m[d.id].min===''?null:Number(m[d.id].min)}):d);
   }
+  base.config.marca=Object.assign({},AT.MARCA_PADRAO,base.config.marca||{});
   if(o.linhaAtiva&&AT.LINHAS[o.linhaAtiva])base.linhaAtiva=o.linhaAtiva;
   if(o.kits>0)base.kits=o.kits;
   return base;
@@ -142,14 +143,62 @@ function fraseSel(c){
   return '<label class="fld"><span>Frases prontas ('+AT.FRASES.length+')</span><select data-fr="1"><option value="">Escolher uma frase pronta…</option>'+g+'</select><small>As marcadas como revisar pedem a sua leitura antes de imprimir.</small></label>';
 }
 const VERPAPEIS=[['verge','Vergê'],['kraft','Kraft'],['matte','Matte'],['vinil','Vinil'],['metal','Azul metálico com vergê colado']];
+function swatch(k){const P=AT.PALETAS[k];return '<span class="sw" aria-hidden="true">'+['ink','onink','acc','acc2','paper'].map(n=>'<i style="background:'+P[n]+'"></i>').join('')+'</span>';}
+function pecaOpts(sel){
+  return Object.entries(AT.GRUPOS_PECA).map(([g,rot])=>'<optgroup label="'+esc(rot)+'">'+AT.PECAS.filter(p=>p.familia===g).map(p=>'<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</optgroup>').join('');
+}
+function listaPecas(){
+  return Object.entries(AT.GRUPOS_PECA).map(([g,rot])=>{
+    const ps=AT.PECAS.filter(p=>p.familia===g);if(!ps.length)return '';
+    return '<h3 class="grp">'+esc(rot)+(g==='marca'?' <span class="novo">novo</span>':'')+'</h3><div class="pecas-lista" role="group" aria-label="'+esc(rot)+'">'+
+     ps.map(p=>'<button data-act="peca-sel" data-id="'+p.id+'" aria-pressed="'+(p.id===selPeca)+'">'+esc(p.nome)+(p.novo?' <span class="novo">novo</span>':'')+'<small>'+fmt(p.w)+' × '+fmt(p.h)+' mm</small></button>').join('')+'</div>';
+  }).join('');
+}
+function marcaGlobal(){
+  const g=st.config.marca;
+  return '<div class="card marca-glob"><h3>Coleção Marca: paleta e nome</h3><p class="muted">Valem para todas as peças da coleção. Cada peça pode sobrescrever abaixo.</p><div class="row2">'+
+   '<label class="fld"><span>Paleta da coleção</span><select data-mg="paleta">'+opts(AT.PALETAS,g.paleta)+'</select></label>'+
+   '<label class="fld"><span>Estilo do nome</span><select data-mg="nome">'+opts(AT.ESTILOS_NOME,g.nome)+'</select></label></div>'+
+   '<div class="sws" aria-label="Cores da paleta escolhida">'+swatch(g.paleta)+'<small>'+esc(AT.PALETAS[g.paleta].nome)+': fundo escuro, texto claro, dois acentos e papel claro.</small></div></div>';
+}
+function fichaMarca(c,d){
+  const lay=AT.fit(c.w,c.h,st.config.margem,{par:!!d.par});
+  const orient=lay.pagina?'página inteira, sem cortes':lay.count?(lay.por||lay.count)+' '+(d.par?'tags':'por folha')+' ('+lay.desc+', margem '+st.config.margem+' mm), '+lay.cuts.total+' cortes por pilha de '+st.config.pilha+' folhas':'não cabe';
+  const fer=Object.keys(d.usa||{}).concat(d.manta?['manta']:[]).concat(d.baseMetal?['metal']:[]).map(k=>{const i=AT.INV_PADRAO.find(x=>x.id===k);return i?i.nome:k;});
+  return '<div class="card"><h3>Ficha da peça</h3><p>'+esc(d.desc||'')+'</p><dl class="dl"><dt>Tamanho</dt><dd>'+fmt(c.w)+' × '+fmt(c.h)+' mm'+(d.fold?', dobra em '+fmt(d.fold)+' mm':'')+'</dd>'+
+   '<dt>Na folha A4</dt><dd>'+esc(orient)+'</dd>'+
+   '<dt>Papéis</dt><dd>'+d.papeis.map(p=>AT.PAPEIS[p].nome).join(', ')+'</dd>'+
+   '<dt>Ferragens</dt><dd>'+(fer.join(', ')||'nenhuma')+'</dd>'+
+   (d.montagem.length?'<dt>Montagem</dt><dd>'+d.montagem.map(esc).join('<br>')+'</dd>':'')+
+   (d.notas&&d.notas.length?'<dt>Notas</dt><dd>'+d.notas.map(esc).join('<br>')+'</dd>':'')+
+   '<dt>Tinta</dt><dd>'+esc(d.notaTinta)+'</dd></dl>'+
+   '<p class="muted">O texto vem do desenho aprovado internamente. Revise tudo antes de imprimir.</p></div>';
+}
+function formMarca(c,d){
+  const g=st.config.marca;
+  const selOpt=(map,cur,herda)=>'<option value=""'+(!cur?' selected':'')+'>'+herda+'</option>'+Object.entries(map).map(([k,v])=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(typeof v==='string'?v:v.nome)+'</option>').join('');
+  const palMap=Object.assign({},AT.PALETAS);
+  const palSel=(d.serie?'<option value="serie"'+(c.paleta==='serie'?' selected':'')+'>Da série (uma paleta por '+(d.id==='m_marcador'?'frase':'título')+', como no desenho)</option>':'');
+  const permitidos=Object.fromEntries(d.papeis.map(p=>[p,AT.PAPEIS[p].nome]));
+  const oc=(d.opcoes||[]).map(o=>'<label class="fld"><span>'+esc(o.rotulo)+'</span><select data-pf="'+o.k+'">'+o.valores.map(v=>'<option value="'+esc(v[0])+'"'+((c[o.k]==null?o.padrao:c[o.k])===v[0]?' selected':'')+'>'+esc(v[1])+'</option>').join('')+'</select></label>').join('');
+  return '<div class="card"><h3>'+esc(c.nome)+' <span class="novo">novo</span></h3>'+
+   '<p class="muted">Desenho fixo em mm: tamanho e texto vêm do desenho aprovado. O que muda aqui é paleta, nome, papel e opções.</p>'+
+   '<div class="row2"><label class="fld"><span>Paleta desta peça</span><select data-pf="paleta">'+selOpt(palMap,c.paleta==='serie'?'serie':c.paleta,'Herdar da coleção ('+esc(AT.PALETAS[g.paleta].nome)+')').replace('</select>','')+palSel+'</select></label>'+
+   '<label class="fld"><span>Estilo do nome nesta peça</span><select data-pf="estiloNome">'+selOpt(AT.ESTILOS_NOME,c.estiloNome,'Herdar da coleção ('+esc(AT.ESTILOS_NOME[g.nome].nome.split(' (')[0])+')')+'</select></label></div>'+
+   '<div class="sws">'+swatch(c.paleta==='serie'?'longitudinal':c.pal)+'<small>Em uso: '+(c.paleta==='serie'?'série':esc(AT.PALETAS[c.pal].nome))+', nome em '+esc(AT.ESTILOS_NOME[c.estilo].nome.split(' (')[0].toLowerCase())+'.</small></div>'+
+   oc+
+   '<label class="fld"><span>Papel</span><select data-pf="papel">'+opts(permitidos,c.papel)+'</select></label>'+
+   (d.nfcOk?'<label class="chk"><input type="checkbox" data-pf="nfc"'+(c.nfc?' checked':'')+'> Leva etiqueta NFC</label>':'')+
+   '<p class="muted">'+(d.qrNao?'Sem QR nesta peça.':'O QR (fundo branco, com legenda) abre o site do consultório e fica sempre ligado.')+'</p>'+
+   '<div class="barra"><button class="btn" data-act="peca-plano">'+icon('plano')+' Pôr no plano</button><button class="btn sec" data-act="peca-folha">'+icon('corte')+' Ver a folha</button><button class="btn sec" data-act="peca-reset">Restaurar peça</button></div></div>';
+}
 function renderPecas(){
+  if(!AT.pecaDef(selPeca))selPeca='m_cartao';
   const c=AT.efetiva(st,selPeca),d=c.base;
-  const lista=AT.PECAS.map(p=>'<button data-act="peca-sel" data-id="'+p.id+'" aria-pressed="'+(p.id===selPeca)+'">'+esc(p.nome)+'<small>'+fmt(p.w)+' × '+fmt(p.h)+' mm</small></button>').join('');
+  const lista=listaPecas();
   const txt=(k,l,rows,hint)=>'<label class="fld"><span>'+l+'</span><textarea rows="'+(rows||2)+'" data-pf="'+k+'">'+esc(Array.isArray(c[k])?c[k].join('\n'):c[k])+'</textarea>'+(hint?'<small>'+hint+'</small>':'')+'</label>';
   const permitidos=Object.fromEntries(d.papeis.map(p=>[p,p==='metal'?'Azul metálico (base) + arte no vergê':AT.PAPEIS[p].nome]));
-  $('#tab-pecas').innerHTML='<h2>Peças</h2><p>Escolha uma peça, edite o texto e veja a prévia. A identificação do médico fica sempre na peça e não pode ser removida.</p>'+
-   '<div class="pecas-lista" role="group" aria-label="Lista de peças">'+lista+'</div>'+
-   '<div class="grid2 e"><div class="card"><h3>'+esc(c.nome)+'</h3>'+
+  const formAntigo='<div class="card"><h3>'+esc(c.nome)+'</h3>'+
    '<label class="fld"><span>Por que a pessoa guarda</span><input type="text" data-pf="porque" value="'+esc(c.porque||'')+'"></label>'+
    (d.variantes?'<p class="muted">Esta peça sai em '+d.variantes.length+' versões: '+d.variantes.join(', ')+'.</p>':txt('frase','Frase ou título',2)+fraseSel(c))+
    txt('sub','Subtítulo',2)+
@@ -164,14 +213,19 @@ function renderPecas(){
    (d.nfcOk?'<label class="chk"><input type="checkbox" data-pf="nfc"'+(c.nfc?' checked':'')+(c.papel==='metal'?' disabled':'')+'> Leva etiqueta NFC'+(c.papel==='metal'?' (bloqueado no azul metálico)':'')+'</label>':'')+
    '<label class="chk"><input type="checkbox" data-pf="fundo"'+(c.fundo?' checked':'')+((c.papel==='matte'||c.papel==='vinil')?'':' disabled')+'> Fundo chapado (só vinil e matte; a arte fica 2,5 mm para dentro)</label>'+
    '<label class="chk"><input type="checkbox" data-pf="idLongo"'+(c.idLongo?' checked':'')+'> Nome completo na identificação</label>'+
-   '<div class="barra"><button class="btn" data-act="peca-plano">'+icon('plano')+' Pôr no plano</button><button class="btn sec" data-act="peca-folha">'+icon('corte')+' Ver a folha</button><button class="btn sec" data-act="peca-reset">Restaurar peça</button></div></div>'+
-   '<div><div class="card"><h3>Prévia</h3><div class="row2"><label class="fld"><span>Ver no papel</span><select data-vp="1">'+VERPAPEIS.map(p=>'<option value="'+p[0]+'"'+((verPapel||c.papel)===p[0]?' selected':'')+'>'+p[1]+(p[0]===c.papel?' (papel da peça)':'')+'</option>').join('')+'</select></label><label class="chk" style="align-self:end"><input type="checkbox" data-vr="1"'+(pvReal?' checked':'')+'> Tamanho real (1 mm = 1 mm na tela)</label></div><div class="pvbox" id="pv"></div><div id="pvinfo" aria-live="polite"></div></div>'+
-   '<div class="card"><h3>Papéis permitidos e ferragens</h3><p>'+d.papeis.map(p=>AT.PAPEIS[p].nome).join(', ')+'.</p><p>Ferragens: '+(Object.keys(d.usa||{}).concat(d.manta?['manta magnética (1 folha por folha impressa)']:[]).map(k=>AT.INV_PADRAO.find(i=>i.id===k)?AT.INV_PADRAO.find(i=>i.id===k).nome:k).join(', ')||'nenhuma')+'.</p></div></div></div>';
+   '<div class="barra"><button class="btn" data-act="peca-plano">'+icon('plano')+' Pôr no plano</button><button class="btn sec" data-act="peca-folha">'+icon('corte')+' Ver a folha</button><button class="btn sec" data-act="peca-reset">Restaurar peça</button></div></div>';
+  const verSel=d.marca?'':'<div class="row2"><label class="fld"><span>Ver no papel</span><select data-vp="1">'+VERPAPEIS.map(p=>'<option value="'+p[0]+'"'+((verPapel||c.papel)===p[0]?' selected':'')+'>'+p[1]+(p[0]===c.papel?' (papel da peça)':'')+'</option>').join('')+'</select></label><label class="chk" style="align-self:end"><input type="checkbox" data-vr="1"'+(pvReal?' checked':'')+'> Tamanho real (1 mm = 1 mm na tela)</label></div>';
+  const real=d.marca?'<label class="chk"><input type="checkbox" data-vr="1"'+(pvReal?' checked':'')+'> Tamanho real (1 mm = 1 mm na tela)</label>':'';
+  $('#tab-pecas').innerHTML='<h2>Peças</h2><p>Escolha uma peça, ajuste as opções e veja a prévia. A identificação do médico fica sempre na peça e não pode ser removida.</p>'+
+   marcaGlobal()+lista+
+   '<div class="grid2 e">'+(d.marca?formMarca(c,d):formAntigo)+
+   '<div><div class="card"><h3>Prévia</h3>'+verSel+real+'<div class="pvbox" id="pv"></div><div id="pvinfo" aria-live="polite"></div></div>'+
+   (d.marca?fichaMarca(c,d):'<div class="card"><h3>Papéis permitidos e ferragens</h3><p>'+d.papeis.map(p=>AT.PAPEIS[p].nome).join(', ')+'.</p><p>Ferragens: '+(Object.keys(d.usa||{}).concat(d.manta?['manta magnética (1 folha por folha impressa)']:[]).map(k=>AT.INV_PADRAO.find(i=>i.id===k)?AT.INV_PADRAO.find(i=>i.id===k).nome:k).join(', ')||'nenhuma')+'.</p></div>')+'</div></div>';
   updatePv();
 }
 function updatePv(){
   const c0=AT.efetiva(st,selPeca),d=c0.base;
-  const vp=verPapel||c0.papel;
+  const vp=d.marca?c0.papel:(verPapel||c0.papel);
   const c=AT.efetivaPapel(st,selPeca,null);
   let aviso='';
   if(vp!==c0.papel){
@@ -181,20 +235,25 @@ function updatePv(){
   const pv=$('#pv');if(!pv)return;
   const tam=AT.tamanhoImpresso(c,st.config.borda);
   let html='';
-  if(d.variantes){html=d.variantes.map(v=>'<div style="margin-bottom:8px">'+pvHtml(c,{variant:v,w:tam.w,h:tam.h,noBase:false}).html+'</div>').join('');pv.style.flexDirection='column';pv.style.alignItems='center';}
-  else{html=pvHtml(c,{w:tam.w,h:tam.h}).html;pv.style.flexDirection='';}
+  if(d.variantes&&d.marca){const wd='calc(50% - 6px)';html=d.variantes.map(v=>'<div style="width:'+wd+'">'+pvHtml(c,{variant:v,w:tam.w,h:tam.h,noBase:false}).html.replace('class="pvwrap','data-maxh="360" class="pvwrap')+'</div>').join('');pv.style.flexDirection='row';pv.style.flexWrap='wrap';pv.style.alignItems='flex-start';pv.style.gap='12px';}
+  else if(d.variantes){html=d.variantes.map(v=>'<div style="margin-bottom:8px">'+pvHtml(c,{variant:v,w:tam.w,h:tam.h,noBase:false}).html+'</div>').join('');pv.style.flexDirection='column';pv.style.alignItems='center';}
+  else{html=pvHtml(c,{w:tam.w,h:tam.h}).html;pv.style.flexDirection='';pv.style.flexWrap='';pv.style.gap='';}
   pv.innerHTML=html;if(pvReal)$$('.pvwrap',pv).forEach(w=>{w.dataset.maxs='1';});fitAll();
   if(pvReal)$$('.pvwrap',pv).forEach(w=>{const wm=+w.dataset.w,hm=+w.dataset.h;w.style.width=(wm*PX)+'px';w.style.height=(hm*PX)+'px';w.firstElementChild.style.transform='none';w.dataset.real='1';});
   const iss=pecaOverflow(c);
-  const lay=AT.fit(tam.w,tam.h,st.config.margem);
-  $('#pvinfo').innerHTML=(iss.length?'<div class="alerta erro">'+icon('alerta')+'<div>Atenção: '+esc(iss.slice(0,3).join('; '))+'. Reduza o texto ou o tamanho.</div></div>':'<div class="alerta ok">'+icon('ok')+'<div>Tudo dentro da zona segura de 2,5 mm.</div></div>')+
-   '<p class="muted">'+lay.count+' por folha A4 (margem '+st.config.margem+' mm). '+(c.base.fold?'Dobra em '+fmt(c.base.fold)+' mm.':'')+'</p>'+aviso;
+  const lay=AT.fit(tam.w,tam.h,st.config.margem,{par:!!d.par});
+  $('#pvinfo').innerHTML=(iss.length?'<div class="alerta erro">'+icon('alerta')+'<div>Atenção: '+esc(iss.slice(0,3).join('; '))+'. Reduza o texto ou o tamanho.</div></div>':'<div class="alerta ok">'+icon('ok')+'<div>'+(d.marca?'Texto dentro da zona segura de 2,5 mm, sem corte e a partir de 6,5 pt.':'Tudo dentro da zona segura de 2,5 mm.')+'</div></div>')+
+   '<p class="muted">'+(lay.pagina?'Página inteira, 1 por folha, sem cortes. ':(lay.por!=null?lay.por:lay.count)+(d.par?' tags':' por folha A4')+' (margem '+st.config.margem+' mm), '+lay.cuts.total+' cortes por pilha de '+st.config.pilha+' folhas. ')+(c.base.fold?'Dobra em '+fmt(c.base.fold)+' mm.':'')+'</p>'+aviso;
 }
 
 /* ---------- 3 Linhas ---------- */
 function pickFrase(fam,k){const l=AT.FRASES.filter(f=>f.f===fam&&!f.rev);return l[k%l.length].t;}
 function aplicarEstiloLinha(id){
   const L=AT.LINHAS[id],cfg=st.linhasCfg[id]||{};
+  if(L.marca){
+    Object.keys(L.pecas).forEach(pid=>{st.pecas[pid]=st.pecas[pid]||{};if(cfg.paleta)st.pecas[pid].paleta=cfg.paleta;if(cfg.estiloNome)st.pecas[pid].estiloNome=cfg.estiloNome;});
+    save();return;
+  }
   const sim=cfg.simbolo||L.simbolo,tin=cfg.tinta||L.tinta,fam=cfg.frase||L.frase;
   let k=0;
   Object.keys(L.pecas).forEach(pid=>{
@@ -206,30 +265,42 @@ function aplicarEstiloLinha(id){
   save();
 }
 function renderLinhas(){
-  const L=AT.LINHAS[selLinha],cfg=st.linhasCfg[selLinha]||{};
+  if(!AT.LINHAS[selLinha])selLinha=Object.keys(AT.LINHAS)[0];
+  const L=AT.LINHAS[selLinha],cfg=st.linhasCfg[selLinha]||{},marca=!!L.marca,gm=st.config.marca;
   const sim=cfg.simbolo||L.simbolo,tin=cfg.tinta||L.tinta,fam=cfg.frase||L.frase,fon=cfg.fonte||st.config.fonte;
-  const cards=Object.entries(AT.LINHAS).map(([k,l])=>'<button class="linhacard" data-act="linha-sel" data-id="'+k+'" aria-pressed="'+(k===selLinha)+'"><h3>'+esc(l.nome)+'</h3><span>'+esc(l.desc)+'</span></button>').join('');
+  const cards=Object.entries(AT.GRUPOS_LINHA).map(([g,rot])=>{
+    const ls=Object.entries(AT.LINHAS).filter(([k,l])=>l.grupo===g);if(!ls.length)return '';
+    return '<h3 class="grp">'+esc(rot)+(g==='marca'?' <span class="novo">novo</span>':'')+'</h3><div class="linhas" role="group" aria-label="'+esc(rot)+'">'+ls.map(([k,l])=>'<button class="linhacard" data-act="linha-sel" data-id="'+k+'" aria-pressed="'+(k===selLinha)+'"><h3>'+esc(l.nome)+'</h3><span>'+esc(l.desc)+'</span></button>').join('')+'</div>';
+  }).join('');
   const tmp=clone(st);tmp.pecas=clone(st.pecas);
   let k=0;
   const minis=Object.entries(L.pecas).map(([pid,q])=>{
-    const d=AT.pecaDef(pid);tmp.pecas[pid]=Object.assign({},tmp.pecas[pid],{simbolo:sim,tinta:tin});
-    if(d.fraseLivre){tmp.pecas[pid].frase=pickFrase(fam,k*3+1);k++;}
-    tmp.config.fonte=fon;
+    const d=AT.pecaDef(pid);
+    if(marca){tmp.pecas[pid]=Object.assign({},tmp.pecas[pid],cfg.paleta?{paleta:cfg.paleta}:{},cfg.estiloNome?{estiloNome:cfg.estiloNome}:{});}
+    else{
+      tmp.pecas[pid]=Object.assign({},tmp.pecas[pid],{simbolo:sim,tinta:tin});
+      if(d.fraseLivre){tmp.pecas[pid].frase=pickFrase(fam,k*3+1);k++;}
+      tmp.config.fonte=fon;
+    }
     const c=AT.efetiva(tmp,pid);
     const tam=AT.tamanhoImpresso(c,st.config.borda);
     return '<div style="width:150px"><div class="pvbox" style="padding:6px">'+pvHtml(c,{w:tam.w,h:tam.h,variant:(c.base.variantes||[])[0]}).html.replace('class="pvwrap','data-maxh="130" data-maxs="1.2" class="pvwrap')+'</div><small><b>'+q+'×</b> '+esc(d.nome)+'</small></div>';
   }).join('');
-  $('#tab-linhas').innerHTML='<h2>Linhas</h2><p>Uma linha é um conjunto de peças com o mesmo símbolo, tinta, fonte e família de frase.</p>'+
-   '<div class="linhas" role="group" aria-label="Escolha a linha">'+cards+'</div>'+
+  const ctl=marca?
+   '<div class="row2"><label class="fld"><span>Paleta da linha</span><select data-ln="paleta"><option value=""'+(!cfg.paleta?' selected':'')+'>Usar a da coleção ('+esc(AT.PALETAS[gm.paleta].nome)+')</option>'+Object.entries(AT.PALETAS).map(([kk,v])=>'<option value="'+kk+'"'+(kk===cfg.paleta?' selected':'')+'>'+esc(v.nome)+'</option>').join('')+'</select></label>'+
+   '<label class="fld"><span>Estilo do nome da linha</span><select data-ln="estiloNome"><option value=""'+(!cfg.estiloNome?' selected':'')+'>Usar o da coleção</option>'+Object.entries(AT.ESTILOS_NOME).map(([kk,v])=>'<option value="'+kk+'"'+(kk===cfg.estiloNome?' selected':'')+'>'+esc(v.nome)+'</option>').join('')+'</select></label></div>'
+   :'<div class="row2"><label class="fld"><span>Símbolo da linha</span><select data-ln="simbolo">'+opts(AT.SIMBOLOS,sim)+'</select></label>'+
+   '<label class="fld"><span>Tinta da linha</span><select data-ln="tinta">'+opts(AT.TINTAS,tin)+'</select></label></div>'+
+   '<div class="row2"><label class="fld"><span>Fonte (vale para tudo)</span><select data-ln="fonte">'+opts(AT.FONTES,fon)+'</select></label>'+
+   '<label class="fld"><span>Família de frase</span><select data-ln="frase">'+opts(AT.FAMILIAS_FRASE,fam)+'</select></label></div>';
+  $('#tab-linhas').innerHTML='<h2>Linhas</h2><p>Uma linha é um conjunto de peças que saem juntas num kit. Na Coleção Marca, a paleta e o nome vêm da aba Peças; a linha só sobrescreve se você escolher.</p>'+
+   cards+
    '<div class="card" style="margin-top:14px"><h3>'+esc(L.nome)+'</h3>'+
    '<div class="grid2"><div>'+
    '<label class="fld"><span>Número de kits</span><input type="number" min="1" max="500" step="1" data-ln="kits" value="'+st.kits+'"></label>'+
-   '<div class="row2"><label class="fld"><span>Símbolo da linha</span><select data-ln="simbolo">'+opts(AT.SIMBOLOS,sim)+'</select></label>'+
-   '<label class="fld"><span>Tinta da linha</span><select data-ln="tinta">'+opts(AT.TINTAS,tin)+'</select></label></div>'+
-   '<div class="row2"><label class="fld"><span>Fonte (vale para tudo)</span><select data-ln="fonte">'+opts(AT.FONTES,fon)+'</select></label>'+
-   '<label class="fld"><span>Família de frase</span><select data-ln="frase">'+opts(AT.FAMILIAS_FRASE,fam)+'</select></label></div>'+
+   ctl+
    '<div class="barra"><button class="btn" data-act="linha-aplicar">Usar como plano</button><button class="btn sec" data-act="linha-somar">Somar ao plano</button></div>'+
-   '<p class="muted">"Usar como plano" troca o plano atual e aplica símbolo, tinta e frases às peças da linha.</p></div>'+
+   '<p class="muted">"Usar como plano" troca o plano atual'+(marca?' e aplica a paleta e o nome escolhidos aqui às peças da linha':' e aplica símbolo, tinta e frases às peças da linha')+'.</p></div>'+
    '<div><h3>Peças por kit</h3><ul class="lista">'+Object.entries(L.pecas).map(([pid,q])=>'<li><b>'+q+'×</b> '+esc(AT.pecaDef(pid).nome)+' <small>(total: '+(q*st.kits)+')</small></li>').join('')+'</ul></div></div>'+
    '<h3>Prévia da linha</h3><div class="minis">'+minis+'</div></div>';
   fitAll();
@@ -237,7 +308,7 @@ function renderLinhas(){
 
 /* ---------- 4 Plano ---------- */
 function kitsPara(linha,pessoas){
-  if(linha==='balcao')return Math.max(1,Math.ceil(pessoas/10));
+  if(linha==='balcao'||linha==='m_balcao')return Math.max(1,Math.ceil(pessoas/10));
   return Math.max(1,pessoas);
 }
 function cabeAuto(itens,base){
@@ -273,7 +344,7 @@ function renderPlano(){
     const d=AT.pecaDef(it.pecaId);const o=pl.itens.find(x=>x.idx===pl.itens.findIndex(y=>false)||false);
     const calc=pl.itens.find(x=>x.idx===i);
     const pap=it.papel||d.papel;
-    return '<tr><td data-l="Peça"><select data-pi="pecaId" data-i="'+i+'" aria-label="Peça">'+AT.PECAS.map(p=>'<option value="'+p.id+'"'+(p.id===it.pecaId?' selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</select></td>'+
+    return '<tr><td data-l="Peça"><select data-pi="pecaId" data-i="'+i+'" aria-label="Peça">'+pecaOpts(it.pecaId)+'</select></td>'+
      '<td data-l="Quantidade"><input type="number" min="1" step="1" data-pi="qtd" data-i="'+i+'" value="'+it.qtd+'" aria-label="Quantidade"></td>'+
      '<td data-l="Papel"><select data-pi="papel" data-i="'+i+'" aria-label="Papel">'+d.papeis.map(p=>'<option value="'+p+'"'+(p===pap?' selected':'')+'>'+AT.PAPEIS[p].curto+'</option>').join('')+'</select></td>'+
      '<td data-l="Por folha" class="num">'+(calc?calc.perSheet:'—')+'</td><td data-l="Folhas" class="num">'+(calc&&calc.sheets!=null?calc.sheets:'—')+'</td>'+
@@ -283,7 +354,7 @@ function renderPlano(){
   const sug=pl.sugestoes.map((s,i)=>'<div class="alerta info">'+icon('info')+'<div>'+esc(s.txt)+' <button class="btn sec" style="margin-left:6px" data-act="sug-aplicar" data-i="'+i+'">Aplicar</button></div></div>').join('');
   const papRows=Object.values(pl.papel).map(p=>'<tr><td data-l="Item">'+esc(p.nome)+'</td><td data-l="Precisa" class="num">'+fmt(p.need)+' '+esc(p.unid)+'</td><td data-l="Tem" class="num">'+(p.have==null?'preencher':fmt(p.have))+'</td><td data-l="Saldo" class="num"><b>'+(p.saldo==null?'—':fmt(p.saldo))+'</b></td><td data-l="Situação">'+statusTag(p)+'</td></tr>').join('');
   const fila=pl.fila.map(g=>'<div class="card"><h3>Coloque '+ART[g.papel]+': folhas 1 a '+g.total+'</h3><ul class="lista">'+g.jobs.map(j=>'<li>'+esc(j.nome)+' <b>folhas '+j.de+' a '+j.ate+'</b></li>').join('')+'</ul></div>').join('')||'<p class="muted">Plano vazio.</p>';
-  const blue=pl.itens.filter(o=>o.base&&o.base.sheets).map(o=>'<li>'+esc(o.nome)+': '+o.base.sheets+' folhas de azul metálico, cortadas em '+fmt(o.c.w)+' × '+fmt(o.c.h)+' mm, sem imprimir.</li>').join('');
+  const blue=pl.itens.filter(o=>o.base&&o.base.sheets).map(o=>'<li>'+esc(o.nome)+': '+o.base.sheets+' folhas de azul metálico, cortadas em '+fmt(o.base.w||o.c.w)+' × '+fmt(o.base.h||o.c.h)+' mm, sem imprimir.</li>').join('');
   const mont=pl.montagem.map(m=>'<div class="card"><h3>'+esc(m.nome)+' <small>('+m.qtd+')</small></h3>'+m.steps.map((s,j)=>{const key=m.pecaId+':'+j;return '<label class="chkitem"><input type="checkbox" data-check="'+key+'"'+(st.check[key]?' checked':'')+'><span>'+esc(s)+'</span></label>';}).join('')+'</div>').join('');
   const ass='<div class="card"><h3>Assistente</h3><p>Diga quem quer alcançar. O app propõe a linha e as quantidades que cabem no inventário.</p><div class="row2">'+
    '<label class="fld"><span>Público</span><select id="as-pub">'+opts(AT.PUBLICOS,'familias')+'</select></label>'+
@@ -351,7 +422,7 @@ function modoBar(){return '<div class="barra" role="group" aria-label="Modo"><bu
 function renderFolhas(){
   if(selFolhaModo==='kit'){renderFolhaKit();return;}
   const cfg=st.config;
-  if(!AT.pecaDef(selFolha.pecaId))selFolha.pecaId='cartao';
+  if(!AT.pecaDef(selFolha.pecaId))selFolha.pecaId='m_cartao';
   const c=efetivaPapel(selFolha.pecaId,selFolha.papel);
   selFolha.papel=c.papel;
   const tam=AT.tamanhoImpresso(c,cfg.borda);
@@ -363,20 +434,24 @@ function renderFolhas(){
     const g=AT.sheetGabarito(st,c),lb=AT.fit(c.w,c.h,cfg.margem);
     extra='<div class="card"><h3>Azul metálico: base e gabarito de colagem</h3><p>O azul não vai à impressora. Corte as bases de '+fmt(c.w)+' × '+fmt(c.h)+' mm ('+lb.count+' por folha) e cole o vergê impresso por cima, deixando '+fmt(cfg.borda)+' mm de borda azul. Nunca coloque NFC sobre o azul.</p><div class="sheetlist"><div class="sheetwrap">'+g.html+'</div></div><h3>Roteiro de corte da base azul</h3>'+roteiroHtml(lb.cuts,cfg.pilha)+'</div>';
   }
+  if(c.base.baseMetal){
+    const bm=c.base.baseMetal,lb=AT.fit(bm.w,bm.h,cfg.margem);
+    extra+='<div class="card"><h3>Azul metálico: bases de '+fmt(bm.w)+' × '+fmt(bm.h)+' mm</h3><p>O azul não vai à impressora. Corte as bases ('+lb.count+' por folha, '+lb.cuts.total+' cortes). Cada tag leva uma base e as duas faces coladas, uma de cada lado, com '+fmt((bm.w-c.w)/2)+' mm de borda azul.</p><h3>Roteiro de corte das bases</h3>'+roteiroHtml(lb.cuts,cfg.pilha)+'</div>';
+  }
   const stacks=Math.ceil(1/cfg.pilha);
   $('#tab-folhas').innerHTML='<h2>Folhas e corte</h2>'+modoBar()+'<p>As peças ficam coladas, sem espaço entre elas. O papel é o fundo. Só cortes retos de ponta a ponta.</p>'+
-   '<div class="grid2 e"><div><div class="card"><div class="row2"><label class="fld"><span>Peça</span><select data-fo="pecaId">'+AT.PECAS.map(p=>'<option value="'+p.id+'"'+(p.id===selFolha.pecaId?' selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</select></label>'+
+   '<div class="grid2 e"><div><div class="card"><div class="row2"><label class="fld"><span>Peça</span><select data-fo="pecaId">'+pecaOpts(selFolha.pecaId)+'</select></label>'+
    '<label class="fld"><span>Papel</span><select data-fo="papel">'+opts(permit,c.papel)+'</select></label></div>'+
-   '<div class="row2"><label class="fld"><span>Margem (mm)</span><input type="number" min="6" max="20" step="0.5" data-cfg="margem" value="'+cfg.margem+'"></label>'+
+   '<div class="row2"><label class="fld"><span>Margem (mm)</span><input type="number" min="3" max="20" step="0.5" data-cfg="margem" value="'+cfg.margem+'"></label>'+
    '<label class="fld"><span>Folhas por pilha</span><input type="number" min="5" max="8" step="1" data-cfg="pilha" value="'+cfg.pilha+'"></label></div>'+
    '<div class="row2"><label class="fld"><span>Borda azul (mm)</span><input type="number" min="2" max="6" step="0.5" data-cfg="borda" value="'+cfg.borda+'"></label>'+
    '<label class="chk" style="align-self:end"><input type="checkbox" data-cfg="guias"'+(cfg.guias?' checked':'')+'> Linhas-guia internas</label></div></div>'+
-   '<div class="kpis"><div class="kpi"><b>'+(lay?lay.count:0)+'</b><span>peças por folha ('+(lay?esc(lay.desc):'')+')</span></div><div class="kpi"><b>'+(lay?lay.cutsAll.total:0)+'</b><span>cortes por pilha</span></div><div class="kpi"><b>'+fmt(tam.w)+'×'+fmt(tam.h)+'</b><span>mm impressos</span></div></div>'+
+   '<div class="kpis"><div class="kpi"><b>'+(lay?(lay.por!=null?lay.por:lay.count):0)+'</b><span>'+(c.base.par?'tags':'peças')+' por folha ('+(lay?esc(lay.desc):'')+(c.base.par?', '+lay.count+' faces':'')+')</span></div><div class="kpi"><b>'+(lay?lay.cutsAll.total:0)+'</b><span>cortes por pilha</span></div><div class="kpi"><b>'+fmt(tam.w)+'×'+fmt(tam.h)+'</b><span>mm impressos</span></div></div>'+
    (r.warn.length?'<div class="alerta erro">'+icon('alerta')+'<div>'+esc(r.warn.slice(0,3).join('; '))+'</div></div>':'')+
    '<div class="barra"><button class="btn" data-act="folha-print">'+icon('print')+' Imprimir esta folha</button></div>'+
-   '<div class="card"><h3>Roteiro de corte</h3>'+(lay&&lay.count?(lay.fill.length?'<p class="muted">A faixa livre embaixo leva '+lay.fill.length+' '+(c.papel==='vinil'?'etiquetas de caixa de remédio':'mini-cartões com QR')+'.</p>':'')+roteiroHtml(lay.cutsAll,cfg.pilha):'<p>Não cabe na A4.</p>')+
+   '<div class="card"><h3>Roteiro de corte</h3>'+(lay&&lay.pagina?'<p>Sem cortes: a peça é a própria folha. Imprima sem bordas, escala 100%.</p>':lay&&lay.count?(lay.fill.length?'<p class="muted">A faixa livre embaixo leva '+lay.fill.length+' '+(c.papel==='vinil'?'etiquetas de caixa de remédio':'mini-cartões com QR')+'.</p>':'')+(c.base.serie?'<p class="muted">Série: cada folha sai com uma variante só, para as peças encostadas terem a mesma cor.</p>':'')+(c.base.par?'<p class="muted">Frente e verso saem lado a lado, em colunas alternadas.</p>':'')+roteiroHtml(lay.cutsAll,cfg.pilha):'<p>Não cabe na A4.</p>')+
    (c.base.fold?'<p><b>Dobra:</b> marcada com traço tracejado curto na margem, em '+fmt(c.base.fold)+' mm a partir da borda da peça.</p>':'')+'</div></div>'+
-   '<div><h3>Folha A4 · '+esc(AT.PAPEIS[c.papel==='metal'?'verge':c.papel].nome)+'</h3><div class="sheetlist"><div class="sheetwrap">'+r.html+'</div></div><p class="muted">Marcas de corte só nas margens, com a medida em mm a partir da borda da folha. A régua de 100 mm no topo serve para conferir a impressão.</p></div></div>'+extra;
+   '<div><h3>Folha A4 · '+esc(AT.PAPEIS[c.papel==='metal'?'verge':c.papel].nome)+'</h3><div class="sheetlist"><div class="sheetwrap">'+r.html+'</div></div>'+(lay&&lay.pagina?'<p class="muted">Página inteira: sem marcas de corte nem régua. Na primeira impressão, confira se a impressora imprimiu até a borda.</p>':'<p class="muted">Marcas de corte só nas margens, com a medida em mm a partir da borda da folha. A régua de 100 mm no topo serve para conferir a impressão.</p>')+'</div></div>'+extra;
 }
 
 /* ---------- 6 Imprimir ---------- */
@@ -388,8 +463,8 @@ function printData(){
   }
   if(printSel.single){
     const c=efetivaPapel(printSel.single.pecaId,printSel.single.papel);
-    const tam=AT.tamanhoImpresso(c,st.config.borda),lay=AT.fit(tam.w,tam.h,st.config.margem);
-    const tmp=clone(st);tmp.plano={itens:[{pecaId:c.id,qtd:Math.max(1,lay.count),papel:c.papel}]};
+    const tam=AT.tamanhoImpresso(c,st.config.borda),lay=AT.fit(tam.w,tam.h,st.config.margem,{par:!!c.base.par});
+    const tmp=clone(st);tmp.plano={itens:[{pecaId:c.id,qtd:Math.max(1,lay.por!=null?lay.por:lay.count),papel:c.papel}]};
     const pl=AT.calcPlano(tmp);
     return {pl,tmp,out:AT.sheetsDoPlano(tmp,pl,printSel.papel)};
   }
@@ -493,7 +568,7 @@ function onClick(e){
    case 'linha-sel':selLinha=t.dataset.id;renderLinhas();break;
    case 'linha-aplicar':aplicarEstiloLinha(selLinha);st.linhaAtiva=selLinha;st.plano.itens=AT.itensDaLinha(selLinha,st.kits);save();showTab('plano');break;
    case 'linha-somar':{aplicarEstiloLinha(selLinha);AT.itensDaLinha(selLinha,st.kits).forEach(n=>{const f=st.plano.itens.find(x=>x.pecaId===n.pecaId&&!x.papel);if(f)f.qtd+=n.qtd;else st.plano.itens.push(n);});save();showTab('plano');break;}
-   case 'item-add':st.plano.itens.push({pecaId:'cartao',qtd:10});save();renderPl();break;
+   case 'item-add':st.plano.itens.push({pecaId:'m_cartao',qtd:10});save();renderPl();break;
    case 'item-del':st.plano.itens.splice(i,1);save();renderPl();break;
    case 'plano-limpar':st.plano.itens=[];save();renderPl();break;
    case 'sug-aplicar':{const pl=AT.calcPlano(st);const s=pl.sugestoes[i];if(s){st.plano.itens[s.idx].papel=s.para;save();renderPl();}break;}
@@ -521,7 +596,7 @@ function onClick(e){
    case 'print-fila':printSel={papel:null,single:null};renderImprimir();fitAll();break;
    case 'proj-save':download('atelie-projeto.json',JSON.stringify(st,null,1));break;
    case 'proj-reset':
-    if(t.dataset.ok){setState(defaults());selPeca='cartao';t.dataset.ok='';t.textContent='Restaurar padrão';$('#proj-msg').innerHTML='<div class="alerta ok">'+icon('ok')+'<div>Padrão restaurado.</div></div>';}
+    if(t.dataset.ok){setState(defaults());selPeca='m_cartao';t.dataset.ok='';t.textContent='Restaurar padrão';$('#proj-msg').innerHTML='<div class="alerta ok">'+icon('ok')+'<div>Padrão restaurado.</div></div>';}
     else{t.dataset.ok='1';t.textContent='Confirmar: apagar tudo e restaurar';}
     break;
   }
@@ -536,6 +611,8 @@ function onInput(e){
   }else if(el.dataset.pf){
     const k=el.dataset.pf;pecaField(selPeca,k,pfValue(el));
     if(e.type==='change'||el.tagName==='SELECT'||el.type==='checkbox'){renderPecas();}else updatePv();
+  }else if(el.dataset.mg){
+    st.config.marca[el.dataset.mg]=el.value;save();renderPecas();
   }else if(el.dataset.ln){
     const k=el.dataset.ln;
     if(k==='kits'){st.kits=Math.max(1,Math.min(500,Math.floor(+el.value)||1));save();if(e.type==='change')renderLinhas();return;}
@@ -551,7 +628,7 @@ function onInput(e){
   }else if(el.dataset.check){st.check[el.dataset.check]=el.checked;save();}
   else if(el.dataset.cfg&&e.type==='change'){
     const k=el.dataset.cfg;st.config[k]=el.type==='checkbox'?el.checked:Number(el.value);
-    if(k==='margem')st.config.margem=Math.max(6,Math.min(20,st.config.margem||6));
+    if(k==='margem')st.config.margem=Math.max(3,Math.min(20,st.config.margem||3.5));
     if(k==='pilha')st.config.pilha=Math.max(5,Math.min(8,Math.round(st.config.pilha)||6));
     if(k==='borda')st.config.borda=Math.max(2,Math.min(6,st.config.borda||3));
     save();renderFolhas();fitAll();

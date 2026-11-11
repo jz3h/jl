@@ -5,12 +5,13 @@ const W=210,H=297,r2=n=>Math.round(n*100)/100;
 const MK='#000000';
 
 AT.marksSvg=function(info,o){
+  if(info.pagina)return '';
   const m=info.m,f=AT.fmt;let s='';
   const L=(x1,y1,x2,y2,ex)=>'<line x1="'+r2(x1)+'" y1="'+r2(y1)+'" x2="'+r2(x2)+'" y2="'+r2(y2)+'" '+(ex||'')+'/>';
   let pv=-99;
   info.cuts.v.forEach(x=>{
     s+=L(x,m-1.5,x,m-0.3,'class="mk" data-d="v" data-p="'+x+'"')+L(x,H-m+0.3,x,H-m+1.5,'class="mk" data-d="v" data-p="'+x+'"');
-    const cl=(x-pv)<8;pv=x;
+    const cl=(x-pv)<8||x+0.45+String(f(x)).length*1.85>W-0.6;pv=x;
     s+=cl?'<text x="'+r2(x-0.45)+'" y="'+r2(m-0.55)+'" text-anchor="end" class="mt">'+f(x)+'</text>':'<text x="'+r2(x+0.45)+'" y="'+r2(m-0.55)+'" class="mt">'+f(x)+'</text>';
   });
   let ph=-99;
@@ -50,7 +51,9 @@ function cellHtml(cl,c,cache,warn,tam){
   const k=c.id+'|'+c.papel+'|'+(cl.variant||'')+'|'+tam.w+'x'+tam.h;
   if(!cache[k]){const r=AT.renderPiece(c,{w:tam.w,h:tam.h,variant:cl.variant});cache[k]=r.html;r.warn.forEach(x=>warn.push(c.nome+': '+x));}
   const p=cache[k];
-  const inner=cl.rot?'<div style="position:absolute;left:0;top:0;width:'+tam.w+'mm;height:'+tam.h+'mm;transform-origin:0 0;transform:translate('+cl.w+'mm,0) rotate(90deg)">'+p+'</div>':p;
+  /* célula girada: a caixa antes do giro precisa caber dentro da página; senão o Chrome a fragmenta na impressão e a arte sai cortada em diagonal */
+  const t0=cl.rot?Math.min(0,297-tam.h-cl.y):0;
+  const inner=cl.rot?'<div style="position:absolute;left:0;top:'+t0+'mm;width:'+tam.w+'mm;height:'+tam.h+'mm;transform-origin:0 0;transform:'+(cl.rev?'translate(0,'+(cl.h-t0)+'mm) rotate(-90deg)':'translate('+cl.w+'mm,'+(-t0)+'mm) rotate(90deg)')+'">'+p+'</div>':(cl.r180?'<div style="position:absolute;left:0;top:0;width:100%;height:100%;transform:rotate(180deg)">'+p+'</div>':p);
   return '<div class="cell" data-peca="'+c.id+'"'+(cl.fill?' data-fill="1"':'')+' style="position:absolute;left:'+cl.x+'mm;top:'+cl.y+'mm;width:'+cl.w+'mm;height:'+cl.h+'mm;overflow:hidden">'+inner+'</div>';
 }
 function foldsOf(c,cells){
@@ -71,12 +74,22 @@ AT.sheetArte=function(st,c,o){
   const cfg=st.config,m=cfg.margem;
   const tam=AT.tamanhoImpresso(c,cfg.borda);
   const paper=c.papel==='metal'?'verge':c.papel;
-  const lay=AT.fitFill(tam.w,tam.h,m,paper,!AT.semFill(c));
+  const lay=AT.fitFill(tam.w,tam.h,m,paper,!AT.semFill(c),{par:!!c.base.par});
   if(!lay.count)return {html:'<section class="sheet"><p style="padding:20mm">Não cabe na A4.</p></section>',info:null,warn:['não cabe']};
   const vars=c.base.variantes;
   const cache={},warn=[];
   let cellsHtml='';
-  lay.cells.forEach(cl=>{cellsHtml+=cellHtml(Object.assign({variant:vars?vars[cl.col%vars.length]:null},cl),c,cache,warn,tam);});
+  /* série (marcadores, A6): uma variante por folha, para as peças encostadas terem a mesma cor; as folhas passam pelas variantes em ordem */
+  const nSheet=o.n||0;
+  const varDe=cl=>{
+    if(!vars)return null;
+    if(c.base.serie)return (c.variante&&vars.includes(c.variante))?c.variante:vars[nSheet%vars.length];
+    if(c.base.par)return vars[cl.col%2];
+    return vars[cl.col%vars.length];
+  };
+  /* peça de duas metades de cor (cartão dobrável): linhas alternadas giram ao contrário, para as bordas encostadas terem a mesma cor */
+  if(c.base.alternaGiro)lay.cells.forEach(cl=>{if(cl.rot&&cl.row%2===1)cl.rev=true;if(!cl.rot&&cl.col%2===1)cl.r180=true;});
+  lay.cells.forEach(cl=>{cellsHtml+=cellHtml(Object.assign({variant:varDe(cl)},cl),c,cache,warn,tam);});
   const fcache={};
   lay.fill.forEach(cl=>{
     const fc=AT.efetivaPapel(st,cl.pecaId,paper);
@@ -84,8 +97,8 @@ AT.sheetArte=function(st,c,o){
   });
   const folds=foldsOf(c,lay.cells);
   const all=lay.cells.concat(lay.fill);
-  const info={pecaId:c.id,nome:c.nome,papel:paper,kind:'arte',m,cuts:lay.cutsAll,folds,cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot,fill:!!x.fill,pecaId:x.pecaId||c.id})),
-   bbox:bboxOf(all),fundo:!!c.fundo,count:lay.count,nFill:lay.fill.length,pw:tam.w,ph:tam.h,metal:c.papel==='metal'};
+  const info={pecaId:c.id,nome:c.nome,papel:paper,kind:'arte',m,cuts:lay.cutsAll,folds,cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot,rev:!!x.rev,r180:!!x.r180,fill:!!x.fill,pecaId:x.pecaId||c.id})),
+   bbox:bboxOf(all),fundo:!!c.fundo,count:lay.count,por:lay.por,nFill:lay.fill.length,pw:tam.w,ph:tam.h,metal:c.papel==='metal',pagina:!!lay.pagina,sangria:!!c.base.marca,variantes:c.base.marca?lay.cells.map(cl=>varDe(cl)):undefined};
   const label=o.label?'<div class="slabel">'+o.label+'</div>':'';
   const html='<section class="sheet" data-paper="'+info.papel+'" data-peca="'+c.id+'" data-kind="arte">'+cellsHtml+AT.marksSvg(info,{guides:cfg.guias})+label+'</section>';
   return {html,info,warn,layout:lay};
@@ -109,7 +122,7 @@ AT.sheetKit=function(st,plano,kf){
 
 /* gabarito de colagem (papel comum): contorno da base e tracejado da arte */
 AT.sheetGabarito=function(st,c,o){
-  const cfg=st.config,m=cfg.margem,b=cfg.borda;
+  const cfg=st.config,m=Math.max(cfg.margem,10),b=cfg.borda;
   const lay=AT.fit(c.w,c.h,m);
   let cellsHtml='';
   lay.cells.forEach(cl=>{
@@ -117,7 +130,7 @@ AT.sheetGabarito=function(st,c,o){
     cellsHtml+='<div style="position:absolute;left:'+cl.x+'mm;top:'+cl.y+'mm;width:'+cl.w+'mm;height:'+cl.h+'mm;box-sizing:border-box;border:0.25mm solid #475569"><div style="position:absolute;left:'+b+'mm;top:'+b+'mm;width:'+iw+'mm;height:'+ih+'mm;box-sizing:border-box;border:0.25mm dashed #64748B;display:flex;align-items:center;justify-content:center;font:600 6pt/1.2 Arial,sans-serif;color:#475569;text-align:center">arte<br>'+AT.fmt(iw)+' × '+AT.fmt(ih)+'</div></div>';
   });
   const info={pecaId:c.id,nome:c.nome,papel:'comum',kind:'gabarito',m,cuts:{v:[],h:[],steps:[],total:0},folds:[],cells:lay.cells.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot})),bbox:bboxOf(lay.cells),count:lay.count};
-  const txt='<div style="position:absolute;left:'+m+'mm;top:'+(H-m-5)+'mm;font:600 7pt/1.2 Arial,sans-serif;color:#334155;width:'+(W-2*m)+'mm">Gabarito de colagem · '+c.nome+' · coloque a base azul no contorno cheio e a arte do vergê no tracejado (borda azul de '+AT.fmt(b)+' mm). Imprima em papel comum.</div>';
+  const txt='<div style="position:absolute;left:'+m+'mm;top:'+(H-m+1.5)+'mm;font:600 8pt/1.2 Arial,sans-serif;color:#334155;width:'+(W-2*m)+'mm">Gabarito de colagem · '+c.nome+' · coloque a base azul no contorno cheio e a arte do vergê no tracejado (borda azul de '+AT.fmt(b)+' mm). Imprima em papel comum.</div>';
   return {html:'<section class="sheet" data-paper="comum" data-peca="'+c.id+'" data-kind="gabarito">'+cellsHtml+txt+'</section>',info,warn:[]};
 };
 
@@ -132,7 +145,7 @@ AT.sheetsDoPlano=function(st,plano,papel){
       if(j.tipo==='kit'){const r=AT.sheetKit(st,plano,plano.kit.folhas[j.kit]);out.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(w));return;}
       if(j.tipo==='gabarito'){const r=AT.sheetGabarito(st,c);out.push(r.html);infos.push(r.info);return;}
       for(let n=0;n<j.sheets;n++){
-        const r=AT.sheetArte(st,c,{});out.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(c.nome+': '+w));
+        const r=AT.sheetArte(st,c,{n});out.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(c.nome+': '+w));
       }
     });
   });

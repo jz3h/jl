@@ -124,3 +124,16 @@ footer{padding:20px 0 40px;color:var(--muted);font-size:.85rem}
  .tabela-r.placar .tr b,.tabela-r.placar .tr .taxa{grid-column:1/-1}
  .tabela-r.placar .tr label::before{content:attr(data-l);display:block;font-size:.78rem;color:var(--muted)}
 }
+
+/* Coleção Marca */
+.pc[data-marca]{line-height:normal;font-weight:400;font-style:normal;letter-spacing:normal;text-align:left}
+.pc[data-marca] h1,.pc[data-marca] h2,.pc[data-marca] h3{color:inherit;line-height:normal;margin:0;font-size:inherit}
+.pc[data-marca] *{box-sizing:content-box}
+.pc[data-marca] img{image-rendering:pixelated}
+h3.grp{margin:.9rem 0 .4rem;font-size:.95rem;color:var(--noite);display:flex;align-items:center;gap:8px}
+.novo{display:inline-block;padding:1px 7px;border-radius:99px;background:var(--ouro);color:#fff;font-size:.68rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.pecas-lista button[aria-pressed=true] .novo{background:#fff;color:var(--azul)}
+.marca-glob{margin-bottom:10px}
+.sws{display:flex;align-items:center;gap:10px;margin:.2rem 0 .6rem}
+.sw{display:inline-flex;border:1px solid var(--linha);border-radius:6px;overflow:hidden;flex:none}
+.sw i{display:block;width:22px;height:22px}

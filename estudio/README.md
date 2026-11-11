@@ -21,3 +21,9 @@ Copie a pasta `atelie/` para `estudio/` no repositório `jl` (GitHub Pages: http
 
 ## Teste
 `node _teste/teste.js` (Playwright e PyMuPDF/OpenCV instalados). Gera PDFs e capturas em `_teste/`.
+
+## Coleção Marca
+
+Oito peças de marca (cartão dobrável, folheto A4, ímã calendário 2027, chaveiro-tag frente e verso, tag de presente, marcador, bloco de compras, série A6) em `js/marca.js` e `js/marca_tpl.js` (modelos gerados dos arquivos `.dc.html`). Paleta e estilo do nome valem para a coleção toda (topo da aba Peças) e podem ser trocados por peça. Fundos chapados vão até a borda da peça (sangria interna) e gastam mais tinta. Fontes locais em `assets/fonts/`. As peças antigas ficam em "Consultório e utilidades".
+
+Testes: `node _teste/teste.js` (inclui `_teste/marca_teste.js` e `check_marca.py`), `node _teste/ui_extra.js`, `node _teste/estrategia_teste.js`.

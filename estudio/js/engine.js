@@ -6,18 +6,32 @@ const r2=n=>Math.round(n*100)/100;
 AT.fmt=n=>{let s=String(r2(n));return s.replace('.',',');};
 
 /* ---------- imposição ---------- */
-function block(reg,o){
-  const cols=Math.floor((reg.w+EPS)/o.a), rows=Math.floor((reg.h+EPS)/o.b), cells=[];
+function block(reg,o,par){
+  let cols=Math.floor((reg.w+EPS)/o.a);const rows=Math.floor((reg.h+EPS)/o.b), cells=[];
+  if(par)cols-=cols%2;
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)cells.push({x:r2(reg.x+c*o.a),y:r2(reg.y+r*o.b),w:o.a,h:o.b,rot:o.rot,col:c,row:r});
   return cells;
 }
 function layoutKey(cells){return cells.length;}
-AT.fit=function(pw,ph,m){
-  m=m==null?6:m;
+AT.fit=function(pw,ph,m,opt){
+  m=m==null?6:m;opt=opt||{};
+  /* peça do tamanho da folha: uma por folha, sem cortes (impressão sem bordas) */
+  if(pw>=W-EPS&&ph>=H-EPS){
+    const cells=[{x:0,y:0,w:W,h:H,rot:false,col:0,row:0,i:0}];
+    return {count:1,por:1,cells,cuts:{prefer:'v',steps:[],v:[],h:[],total:0},desc:'página inteira, sem cortes',m:0,pagina:true};
+  }
   const U={x:m,y:m,w:W-2*m,h:H-2*m};
   const os=[{a:pw,b:ph,rot:false}];
   if(Math.abs(pw-ph)>EPS)os.push({a:ph,b:pw,rot:true});
   const cands=[];
+  /* peça em par (frente e verso lado a lado): sempre um número par de colunas */
+  if(opt.par){
+    let bestP=null;
+    os.forEach(o=>{const cells=block(U,o,true);if(!cells.length)return;const c={desc:o.rot?'girada':'em pé',cells,cuts:AT.cuts(cells)};if(!bestP||cells.length>bestP.cells.length||(cells.length===bestP.cells.length&&c.cuts.total<bestP.cuts.total))bestP=c;});
+    if(!bestP)return {count:0,por:0,cells:[],cuts:{steps:[],v:[],h:[],total:0},desc:'não cabe',m};
+    bestP.count=bestP.cells.length;bestP.por=bestP.count/2;bestP.m=m;bestP.cells.forEach((c,i)=>{c.i=i;});
+    return bestP;
+  }
   os.forEach(o=>cands.push({desc:o.rot?'girada':'em pé',cells:block(U,o)}));
   os.forEach(oi=>{
     const rowsI=Math.floor((U.h+EPS)/oi.b), colsI=Math.floor((U.w+EPS)/oi.a);
@@ -42,7 +56,7 @@ AT.fit=function(pw,ph,m){
     if(!best||c.cells.length>best.cells.length||(c.cells.length===best.cells.length&&c.cuts.total<best.cuts.total))best=c;
   });
   if(!best)return {count:0,cells:[],cuts:{steps:[],v:[],h:[],total:0},desc:'não cabe',m};
-  best.count=best.cells.length;best.m=m;
+  best.count=best.cells.length;best.por=best.count;best.m=m;
   best.cells.forEach((c,i)=>{c.i=i;});
   return best;
 };
@@ -64,8 +78,8 @@ AT.fillBand=function(cells,m,paper){
   return out;
 };
 AT.semFill=c=>c.papel==='metal'||!!c.base.manta||!!c.base.raw;
-AT.fitFill=function(pw,ph,m,paper,fill){
-  const lay=AT.fit(pw,ph,m);
+AT.fitFill=function(pw,ph,m,paper,fill,opt){
+  const lay=AT.fit(pw,ph,m,opt);
   lay.fill=[];lay.cutsAll=lay.cuts;
   if(fill&&lay.count){
     lay.fill=AT.fillBand(lay.cells,m,paper);
@@ -166,7 +180,21 @@ AT.efetiva=function(st,id){
   if(c.papel==='metal'){c.nfc=false;c.fundo=false;}
   if(!(c.papel==='matte'||c.papel==='vinil'))c.fundo=false;
   if(!c.fonte||!AT.FONTES[c.fonte])c.fonte=cfg.fonte;
+  if(d.marca)AT.marcaEfetiva(c,d,cfg);
   return c;
+};
+/* peça da coleção: herda paleta e estilo do nome da coleção (st.config.marca); a peça pode sobrescrever */
+AT.marcaEfetiva=function(c,d,cfg){
+  const g=Object.assign({},AT.MARCA_PADRAO,cfg.marca||{});
+  c.pal=(c.paleta&&c.paleta!=='serie'&&AT.PALETAS[c.paleta])?c.paleta:(AT.PALETAS[g.paleta]?g.paleta:AT.MARCA_PADRAO.paleta);
+  if(c.paleta==='serie'&&!d.serie)c.paleta='';
+  c.estilo=(c.estiloNome&&AT.ESTILOS_NOME[c.estiloNome])?c.estiloNome:(AT.ESTILOS_NOME[g.nome]?g.nome:'grotesca');
+  c.qr=d.qrNao?false:true;
+  if(!d.nfcOk)c.nfc=false;
+  if(d.dimensao){const dm=d.dimensao(c);c.w=dm.w;c.h=dm.h;}
+  else{c.w=d.w;c.h=d.h;}
+  if(d.variantes&&c.variante&&!d.variantes.includes(c.variante))c.variante='';
+  c.fundo=false;
 };
 AT.efetivaPapel=function(st,pecaId,papel){
   const c=AT.efetiva(st,pecaId);
@@ -191,7 +219,7 @@ AT._finalizaPlano=function(st,res,need,add,pilha,m){
   res.kit={folhas:[],economia:0,detalhe:[]};
   const grupos={};
   res.itens.forEach(o=>{
-    if(!o.fit||o.papel==='metal'||o.c.base.manta||o.printPaper==='comum')return;
+    if(!o.fit||o.papel==='metal'||o.c.base.manta||o.c.base.semKit||o.printPaper==='comum')return;
     const full=Math.floor(o.qtd/o.perSheet),rem=o.qtd-full*o.perSheet;
     if(rem<=0)return;
     const k=o.printPaper+'|'+AT.linhaDe(o.pecaId)+'|'+o.c.fonte+o.c.tinta;
@@ -234,10 +262,10 @@ AT.calcPlano=function(st){
     if(it.papel&&c.base.papeis.includes(it.papel)){c.papel=it.papel;if(it.papel==='metal'){c.nfc=false;c.fundo=false;}if(!(c.papel==='matte'||c.papel==='vinil'))c.fundo=false;}
     const tam=AT.tamanhoImpresso(c,bd);
     const noFill=AT.semFill(c);
-    const lay=AT.fitFill(tam.w,tam.h,m,c.papel==='metal'?'verge':c.papel,!noFill);
-    const o={idx,pecaId:it.pecaId,nome:c.nome,qtd:it.qtd,papel:c.papel,tam,layout:lay,perSheet:lay.count,fit:lay.count>0,extra:[],c};
+    const lay=AT.fitFill(tam.w,tam.h,m,c.papel==='metal'?'verge':c.papel,!noFill,{par:!!c.base.par});
+    const o={idx,pecaId:it.pecaId,nome:c.nome,qtd:it.qtd,papel:c.papel,tam,layout:lay,perSheet:lay.por!=null?lay.por:lay.count,fit:lay.count>0,extra:[],c};
     if(!lay.count){res.alertas.push({tipo:'erro',txt:c.nome+' não cabe numa A4 com margem de '+m+' mm.'});res.itens.push(o);return;}
-    o.sheets=Math.ceil(it.qtd/lay.count);o.sobra=o.sheets*lay.count-it.qtd;
+    o.sheets=Math.ceil(it.qtd/o.perSheet);o.sobra=o.sheets*o.perSheet-it.qtd;
     const printPaper=c.papel==='metal'?'verge':c.papel;
     o.printPaper=printPaper;
     add(printPaper,o.sheets);
@@ -247,6 +275,12 @@ AT.calcPlano=function(st){
       o.base={layout:lb,perSheet:lb.count,sheets:lb.count?Math.ceil(it.qtd/lb.count):0};
       add('metal',o.base.sheets);add('comum',1);
       cutTotal+=lb.cuts.total*Math.ceil(o.base.sheets/pilha);
+      if(!lb.count)res.alertas.push({tipo:'erro',txt:c.nome+': a base azul não cabe numa A4.'});
+    }
+    if(c.base.baseMetal){
+      const bm=c.base.baseMetal,lb=AT.fit(bm.w,bm.h,m);
+      o.base={layout:lb,perSheet:lb.count,sheets:lb.count?Math.ceil(it.qtd/lb.count):0,w:bm.w,h:bm.h,semGabarito:true};
+      add('metal',o.base.sheets);cutTotal+=lb.cuts.total*Math.ceil(o.base.sheets/pilha);
       if(!lb.count)res.alertas.push({tipo:'erro',txt:c.nome+': a base azul não cabe numa A4.'});
     }
     o.cortes=cutTotal;o.cutTotalArte=cutTotal;res.itens.push(o);return;
@@ -294,7 +328,7 @@ AT.calcPlano=function(st){
     res.itens.forEach(o=>{
       if(!o.fit)return;
       if(o.printPaper===pp&&pp!=='comum'&&o.sheets>0){jobs.push({idx:o.idx,pecaId:o.pecaId,nome:o.nome+(o.papel==='metal'?' (arte para colar no azul)':''),de:n+1,ate:n+o.sheets,sheets:o.sheets,tipo:'arte'});n+=o.sheets;}
-      if(pp==='comum'&&o.base){jobs.push({idx:o.idx,pecaId:o.pecaId,nome:'Gabarito de colagem: '+o.nome,de:n+1,ate:n+1,sheets:1,tipo:'gabarito'});n+=1;}
+      if(pp==='comum'&&o.base&&!o.base.semGabarito){jobs.push({idx:o.idx,pecaId:o.pecaId,nome:'Gabarito de colagem: '+o.nome,de:n+1,ate:n+1,sheets:1,tipo:'gabarito'});n+=1;}
     });
     res.kit.folhas.forEach((f,ki)=>{if(f.paper===pp){jobs.push({kit:ki,nome:'Folha-kit: '+[...new Set(f.cells.map(c=>AT.pecaDef(c.pecaId).nome))].join(' + '),de:n+1,ate:n+1,sheets:1,tipo:'kit'});n+=1;}});
     if(n)res.fila.push({papel:pp,total:n,jobs});
@@ -308,7 +342,7 @@ AT.calcPlano=function(st){
       steps.push('Corte as bases do azul metálico em '+AT.fmt(o.c.w)+' × '+AT.fmt(o.c.h)+' mm (sem imprimir; o azul nunca entra na impressora com tinta).');
       steps.push('Corte as artes do vergê em '+AT.fmt(o.tam.w)+' × '+AT.fmt(o.tam.h)+' mm.');
       steps.push('Use o gabarito de colagem: base no contorno, arte no tracejado, borda azul de '+AT.fmt(bd)+' mm em volta.');
-    }else{if(o.sheets>0)steps.push('Corte as '+o.sheets+' folhas pelo roteiro (peças de '+AT.fmt(o.c.w)+' × '+AT.fmt(o.c.h)+' mm).');if(o.kitQtd)steps.push('As outras '+o.kitQtd+' peças saem da folha-kit (veja Folhas e corte).');}
+    }else{if(o.sheets>0)steps.push(o.layout.pagina?'Imprima '+o.sheets+' folhas A4 sem bordas. Não há cortes: a peça é a própria folha.':'Corte as '+o.sheets+' folhas pelo roteiro (peças de '+AT.fmt(o.c.w)+' × '+AT.fmt(o.c.h)+' mm'+(o.c.base.par?', duas faces por tag':'')+').');if(o.base&&o.base.semGabarito)steps.push('Corte '+o.base.sheets+' folhas de azul metálico em bases de '+AT.fmt(o.base.w)+' × '+AT.fmt(o.base.h)+' mm ('+o.base.perSheet+' por folha, sem imprimir).');if(o.kitQtd)steps.push('As outras '+o.kitQtd+' peças saem da folha-kit (veja Folhas e corte).');}
     if(o.c.base.manta)steps.push('Antes de cortar: cole a folha matte impressa na manta magnética. Corte as duas juntas. A manta nunca entra na impressora.');
     (o.c.base.montagem||[]).forEach(s=>steps.push(s));
     if(o.c.nfc&&o.papel!=='metal')steps.push('Cole a etiqueta NFC no verso, sobre o papel (nunca sobre o azul metálico). Grave e teste antes de fechar.');

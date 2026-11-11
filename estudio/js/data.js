@@ -65,6 +65,6 @@ AT.LINHAS={
  rua:{nome:'Linha Rua',desc:'Para feira e parque: panfleto, cartão e adesivo.',simbolo:'solar_harmony',tinta:'coral',frase:'Acolhimento',pecas:{panfleto_a5:1,cartao:1,adesivo_quadrado:1}},
  balcao:{nome:'Linha Balcão',desc:'Para parceiros: display, cartões e tags.',simbolo:'hexagono_ouro',tinta:'ameixa',frase:'Corpo',pecas:{display_a5:1,cartao:10,tag_kit:2}}
 };
-AT.ASSISTENTE_LINHA={familias:'casa',idosos:'cuidador',jovens:'trabalho',sobrecarregados:'trabalho',polimedicados:'cuidador',colegas:'colega',parceiros:'balcao'};
-AT.ASSISTENTE_OCASIAO={rua:'rua',balcao:'balcao',visita:'colega'};
+AT.ASSISTENTE_LINHA={familias:'m_casa',idosos:'primeiro_contato',jovens:'chaveiro',sobrecarregados:'primeiro_contato',polimedicados:'primeiro_contato',colegas:'m_balcao',parceiros:'m_balcao'};
+AT.ASSISTENTE_OCASIAO={rua:'chaveiro',balcao:'m_balcao',visita:'primeiro_contato'};
 })(window);
