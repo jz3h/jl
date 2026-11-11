@@ -7,13 +7,17 @@ const MK='#000000';
 AT.marksSvg=function(info,o){
   const m=info.m,f=AT.fmt;let s='';
   const L=(x1,y1,x2,y2,ex)=>'<line x1="'+r2(x1)+'" y1="'+r2(y1)+'" x2="'+r2(x2)+'" y2="'+r2(y2)+'" '+(ex||'')+'/>';
+  let pv=-99;
   info.cuts.v.forEach(x=>{
     s+=L(x,m-1.5,x,m-0.3,'class="mk" data-d="v" data-p="'+x+'"')+L(x,H-m+0.3,x,H-m+1.5,'class="mk" data-d="v" data-p="'+x+'"');
-    s+='<text x="'+r2(x+0.45)+'" y="'+r2(m-0.55)+'" class="mt">'+f(x)+'</text>';
+    const cl=(x-pv)<8;pv=x;
+    s+=cl?'<text x="'+r2(x-0.45)+'" y="'+r2(m-0.55)+'" text-anchor="end" class="mt">'+f(x)+'</text>':'<text x="'+r2(x+0.45)+'" y="'+r2(m-0.55)+'" class="mt">'+f(x)+'</text>';
   });
+  let ph=-99;
   info.cuts.h.forEach(y=>{
     s+=L(m-1.5,y,m-0.3,y,'class="mk" data-d="h" data-p="'+y+'"')+L(W-m+0.3,y,W-m+1.5,y,'class="mk" data-d="h" data-p="'+y+'"');
-    s+='<text transform="translate('+r2(m-0.75)+' '+r2(y+3.6)+') rotate(-90)" class="mt">'+f(y)+'</text>';
+    const cl=(y-ph)<8;ph=y;
+    s+='<text transform="translate('+r2(m-0.75)+' '+r2(cl?y-0.45:y+3.6)+') rotate(-90)" class="mt">'+f(y)+'</text>';
   });
   (info.folds||[]).forEach(fd=>{
     const T=(x1,y1,x2,y2)=>L(x1,y1,x2,y2,'class="fd" data-d="'+fd.dir+'" data-p="'+fd.pos+'"');
@@ -41,37 +45,65 @@ AT.marksSvg=function(info,o){
 
 function bboxOf(cells){return {x0:Math.min(...cells.map(c=>c.x)),y0:Math.min(...cells.map(c=>c.y)),x1:Math.max(...cells.map(c=>c.x+c.w)),y1:Math.max(...cells.map(c=>c.y+c.h))};}
 
-/* c = peça efetiva; folha de arte */
-AT.sheetArte=function(st,c,o){
-  o=o||{};
-  const cfg=st.config,m=cfg.margem;
-  const tam=AT.tamanhoImpresso(c,cfg.borda);
-  const lay=AT.fit(tam.w,tam.h,m);
-  if(!lay.count)return {html:'<section class="sheet"><p style="padding:20mm">Não cabe na A4.</p></section>',info:null,warn:['não cabe']};
-  const vars=c.base.variantes;
-  const cache={};const warn=[];
-  const piece=(v)=>{const k=v||'';if(!cache[k]){const r=AT.renderPiece(c,{w:tam.w,h:tam.h,variant:v});cache[k]=r.html;r.warn.forEach(x=>warn.push(x));}return cache[k];};
-  let cellsHtml='';
-  lay.cells.forEach((cl,i)=>{
-    const v=vars?vars[(cl.col+cl.row*0)%vars.length]:null;
-    const p=piece(v);
-    const inner=cl.rot?'<div style="position:absolute;left:0;top:0;width:'+tam.w+'mm;height:'+tam.h+'mm;transform-origin:0 0;transform:translate('+cl.w+'mm,0) rotate(90deg)">'+p+'</div>':p;
-    cellsHtml+='<div class="cell" style="position:absolute;left:'+cl.x+'mm;top:'+cl.y+'mm;width:'+cl.w+'mm;height:'+cl.h+'mm;overflow:hidden">'+inner+'</div>';
-  });
-  /* dobras */
+/* renderiza uma célula (peça efetiva + variante) com cache */
+function cellHtml(cl,c,cache,warn,tam){
+  const k=c.id+'|'+c.papel+'|'+(cl.variant||'')+'|'+tam.w+'x'+tam.h;
+  if(!cache[k]){const r=AT.renderPiece(c,{w:tam.w,h:tam.h,variant:cl.variant});cache[k]=r.html;r.warn.forEach(x=>warn.push(c.nome+': '+x));}
+  const p=cache[k];
+  const inner=cl.rot?'<div style="position:absolute;left:0;top:0;width:'+tam.w+'mm;height:'+tam.h+'mm;transform-origin:0 0;transform:translate('+cl.w+'mm,0) rotate(90deg)">'+p+'</div>':p;
+  return '<div class="cell" data-peca="'+c.id+'"'+(cl.fill?' data-fill="1"':'')+' style="position:absolute;left:'+cl.x+'mm;top:'+cl.y+'mm;width:'+cl.w+'mm;height:'+cl.h+'mm;overflow:hidden">'+inner+'</div>';
+}
+function foldsOf(c,cells){
   const folds=[];
   if(c.base.fold&&c.papel!=='metal'){
     const seen={};
-    lay.cells.forEach(cl=>{
+    cells.forEach(cl=>{
       const d=cl.rot?'h':'v',pos=r2((cl.rot?cl.y:cl.x)+c.base.fold);
       const k=d+pos;if(!seen[k]){seen[k]=1;folds.push({dir:d,pos});}
     });
   }
-  const info={pecaId:c.id,nome:c.nome,papel:c.papel==='metal'?'verge':c.papel,kind:'arte',m,cuts:lay.cuts,folds,cells:lay.cells.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot})),
-   bbox:bboxOf(lay.cells),fundo:!!c.fundo,count:lay.count,pw:tam.w,ph:tam.h,metal:c.papel==='metal'};
+  return folds;
+}
+
+/* c = peça efetiva; folha de arte (com faixa livre preenchida quando >= 20 mm) */
+AT.sheetArte=function(st,c,o){
+  o=o||{};
+  const cfg=st.config,m=cfg.margem;
+  const tam=AT.tamanhoImpresso(c,cfg.borda);
+  const paper=c.papel==='metal'?'verge':c.papel;
+  const lay=AT.fitFill(tam.w,tam.h,m,paper,!AT.semFill(c));
+  if(!lay.count)return {html:'<section class="sheet"><p style="padding:20mm">Não cabe na A4.</p></section>',info:null,warn:['não cabe']};
+  const vars=c.base.variantes;
+  const cache={},warn=[];
+  let cellsHtml='';
+  lay.cells.forEach(cl=>{cellsHtml+=cellHtml(Object.assign({variant:vars?vars[cl.col%vars.length]:null},cl),c,cache,warn,tam);});
+  const fcache={};
+  lay.fill.forEach(cl=>{
+    const fc=AT.efetivaPapel(st,cl.pecaId,paper);
+    cellsHtml+=cellHtml(cl,fc,fcache,warn,{w:cl.w,h:cl.h});
+  });
+  const folds=foldsOf(c,lay.cells);
+  const all=lay.cells.concat(lay.fill);
+  const info={pecaId:c.id,nome:c.nome,papel:paper,kind:'arte',m,cuts:lay.cutsAll,folds,cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:x.rot,fill:!!x.fill,pecaId:x.pecaId||c.id})),
+   bbox:bboxOf(all),fundo:!!c.fundo,count:lay.count,nFill:lay.fill.length,pw:tam.w,ph:tam.h,metal:c.papel==='metal'};
   const label=o.label?'<div class="slabel">'+o.label+'</div>':'';
   const html='<section class="sheet" data-paper="'+info.papel+'" data-peca="'+c.id+'" data-kind="arte">'+cellsHtml+AT.marksSvg(info,{guides:cfg.guias})+label+'</section>';
   return {html,info,warn,layout:lay};
+};
+
+/* folha-kit: peças diferentes de uma mesma linha e papel numa folha só */
+AT.sheetKit=function(st,plano,kf){
+  const cfg=st.config,m=cfg.margem,warn=[],cache={},fcache={};
+  let cellsHtml='';
+  kf.cells.forEach(cl=>{
+    const it=plano.itens.find(x=>x.idx===cl.idx);
+    cellsHtml+=cellHtml(cl,it.c,cache,warn,{w:cl.w,h:cl.h});
+  });
+  kf.fill.forEach(cl=>{cellsHtml+=cellHtml(cl,AT.efetivaPapel(st,cl.pecaId,kf.paper),fcache,warn,{w:cl.w,h:cl.h});});
+  const all=kf.cells.concat(kf.fill);
+  const info={pecaId:'kit',nome:'Folha-kit',papel:kf.paper,kind:'kit',m,cuts:kf.cuts,folds:[],cells:all.map(x=>({x:x.x,y:x.y,w:x.w,h:x.h,rot:false,fill:!!x.fill,pecaId:x.pecaId})),bbox:bboxOf(all),count:kf.cells.length,nFill:kf.fill.length};
+  const html='<section class="sheet" data-paper="'+kf.paper+'" data-peca="kit" data-kind="kit">'+cellsHtml+AT.marksSvg(info,{guides:cfg.guias})+'</section>';
+  return {html,info,warn};
 };
 
 /* gabarito de colagem (papel comum): contorno da base e tracejado da arte */
@@ -95,7 +127,8 @@ AT.sheetsDoPlano=function(st,plano,papel){
   grupos.forEach(g=>{
     g.jobs.forEach(j=>{
       const it=plano.itens.find(x=>x.idx===j.idx);
-      const c=it.c;
+      const c=it&&it.c;
+      if(j.tipo==='kit'){const r=AT.sheetKit(st,plano,plano.kit.folhas[j.kit]);out.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(w));return;}
       if(j.tipo==='gabarito'){const r=AT.sheetGabarito(st,c);out.push(r.html);infos.push(r.info);return;}
       for(let n=0;n<j.sheets;n++){
         const r=AT.sheetArte(st,c,{});out.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(c.nome+': '+w));

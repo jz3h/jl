@@ -97,3 +97,30 @@ footer{padding:20px 0 40px;color:var(--muted);font-size:.85rem}
  .sheetwrap:last-child{break-after:auto;page-break-after:auto}
  .sheetwrap>.sheet{position:relative!important;transform:none!important;box-shadow:none!important;background:none!important}
 }
+.btn.sec[aria-pressed=true]{background:var(--azul);color:#fff;border-color:var(--azul)}
+.estr-topo{border:2px solid var(--ouro);background:#FFF8E1}
+.estr-topo textarea{width:100%;font:inherit}
+.small{font-size:.88rem}
+.jogadas{display:grid;gap:14px;grid-template-columns:1fr}
+@media(min-width:900px){.jogadas{grid-template-columns:1fr 1fr}}
+.dl{margin:0}.dl dt{font-weight:800;color:var(--azul);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;margin-top:.55rem}.dl dd{margin:.1rem 0 0}
+.semanas{display:grid;gap:14px;grid-template-columns:1fr}@media(min-width:900px){.semanas{grid-template-columns:1fr 1fr}}
+.estr-it{display:flex;gap:10px;align-items:flex-start;margin:.5rem 0}.estr-it input{margin-top:.3rem;flex:none}
+.tabela-r{display:grid;gap:0;border:1px solid var(--linha);border-radius:var(--r);overflow:hidden;background:var(--card)}
+.tabela-r .tr{display:grid;grid-template-columns:1.2fr .9fr 3fr 1.3fr;gap:10px;padding:9px 12px;border-top:1px solid var(--linha);align-items:start}
+.tabela-r .th{background:var(--areia);font-weight:800;border-top:0}
+.tabela-r.placar .tr{grid-template-columns:.7fr repeat(5,1fr);align-items:center}
+.tabela-r.placar input{width:100%;min-width:0;font:inherit;padding:6px}
+.tabela-r .tot{background:var(--areia);font-weight:800}
+.tabela-r .taxa{font-weight:800;color:var(--azul)}
+.so{position:absolute;left:-9999px}
+.st{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:800;font-size:.8rem;border:1.5px solid}
+.st-permitido{color:var(--ok);border-color:var(--ok)}.st-cinza{color:var(--ouro);border-color:var(--ouro)}.st-vedado{color:var(--erro);border-color:var(--erro)}
+@media(max-width:700px){
+ .tabela-r:not(.placar) .th{display:none}
+ .tabela-r:not(.placar) .tr{grid-template-columns:1fr}
+ .tabela-r.placar .th{display:none}
+ .tabela-r.placar .tr{grid-template-columns:repeat(2,1fr)}
+ .tabela-r.placar .tr b,.tabela-r.placar .tr .taxa{grid-column:1/-1}
+ .tabela-r.placar .tr label::before{content:attr(data-l);display:block;font-size:.78rem;color:var(--muted)}
+}

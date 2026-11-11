@@ -6,6 +6,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;',
 const clone=o=>JSON.parse(JSON.stringify(o));
 const KEY='atelie.v1', PX=96/25.4;
 const fmt=AT.fmt;
+let verPapel=null,pvReal=false,selFolhaModo='peca',selKit={linha:'casa',papel:'matte'};
 let st, tab='inventario', selPeca='cartao', selLinha='casa', selFolha={pecaId:'cartao',papel:null}, printSel={papel:null,single:null}, saveT=null, lastPrint=null;
 const ART={verge:'o vergê',kraft:'o kraft',matte:'o matte',vinil:'o vinil',comum:'o papel comum',metal:'o azul metálico'};
 
@@ -13,13 +14,13 @@ const ART={verge:'o vergê',kraft:'o kraft',matte:'o matte',vinil:'o vinil',comu
 function defaults(){
   const s={v:1,inventario:clone(AT.INV_PADRAO),
    config:{margem:6,guias:false,pilha:6,borda:3,fonte:'jakarta',simbolo:'flower_of_life',tinta:'azul'},
-   pecas:{},plano:{itens:[]},linhaAtiva:'casa',kits:10,linhasCfg:{},distrib:{},check:{}};
+   pecas:{},plano:{itens:[]},linhaAtiva:'casa',kits:10,linhasCfg:{},distrib:{},check:{},estrategia:{check:{},placar:{},link:'',pub:'',bairro:''}};
   s.plano.itens=AT.itensDaLinha('casa',10);
   return s;
 }
 function merge(base,o){
   if(!o||typeof o!=='object')return base;
-  ['config','pecas','plano','linhasCfg','distrib','check'].forEach(k=>{if(o[k]&&typeof o[k]==='object')base[k]=Object.assign(base[k],o[k]);});
+  ['config','pecas','plano','linhasCfg','distrib','check','estrategia'].forEach(k=>{if(o[k]&&typeof o[k]==='object')base[k]=Object.assign(base[k],o[k]);});
   if(Array.isArray(o.inventario)){
     const m={};o.inventario.forEach(i=>{m[i.id]=i;});
     base.inventario=base.inventario.map(d=>m[d.id]?Object.assign({},d,{qtd:m[d.id].qtd==null||m[d.id].qtd===''?null:Number(m[d.id].qtd),min:m[d.id].min==null||m[d.id].min===''?null:Number(m[d.id].min)}):d);
@@ -34,8 +35,8 @@ function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setIt
 function setState(s){st=s;AT.st=st;save();}
 
 /* ---------- abas ---------- */
-const TABS=[['inventario','Inventário','i-inv'],['pecas','Peças','i-peca'],['linhas','Linhas','i-linha'],['plano','Plano','i-plano'],['folhas','Folhas e corte','i-corte'],['imprimir','Imprimir','i-print'],['distribuicao','Distribuição','i-mapa'],['projeto','Projeto','i-proj']];
-const REND={inventario:()=>renderInventario(),pecas:()=>renderPecas(),linhas:()=>renderLinhas(),plano:()=>renderPlano(),folhas:()=>renderFolhas(),imprimir:()=>renderImprimir(),distribuicao:()=>renderDistrib(),projeto:()=>renderProjeto()};
+const TABS=[['inventario','Inventário','i-inv'],['pecas','Peças','i-peca'],['linhas','Linhas','i-linha'],['plano','Plano','i-plano'],['folhas','Folhas e corte','i-corte'],['imprimir','Imprimir','i-print'],['distribuicao','Distribuição','i-mapa'],['estrategia','Estratégia','i-estr'],['projeto','Projeto','i-proj']];
+const REND={inventario:()=>renderInventario(),pecas:()=>renderPecas(),linhas:()=>renderLinhas(),plano:()=>renderPlano(),folhas:()=>renderFolhas(),imprimir:()=>renderImprimir(),distribuicao:()=>renderDistrib(),estrategia:()=>renderEstrategia(),projeto:()=>renderProjeto()};
 function buildNav(){
   $('#tabs').innerHTML=TABS.map(t=>'<button role="tab" id="t-'+t[0]+'" aria-controls="tab-'+t[0]+'" aria-selected="false" data-tab="'+t[0]+'"><svg aria-hidden="true"><use href="#i-'+t[2].slice(2)+'"/></svg><span>'+t[1]+'</span></button>').join('');
 }
@@ -63,6 +64,7 @@ function fitAll(){
     const sh=w.firstElementChild;if(sh)sh.style.transform='scale('+s+')';
   });
   $$('.pvwrap').forEach(w=>{
+    if(w.dataset.real)return;
     const box=w.parentElement,wm=+w.dataset.w,hm=+w.dataset.h;
     const avail=Math.max(120,box.clientWidth-24);
     const s=Math.max(.3,Math.min(avail/(wm*PX),(w.dataset.maxh?+w.dataset.maxh:520)/(hm*PX),w.dataset.maxs?+w.dataset.maxs:3.2));
@@ -135,6 +137,11 @@ function pecaOverflow(c){
   host.remove();
   return issues.concat(warn);
 }
+function fraseSel(c){
+  const g=Object.entries(AT.FAMILIAS_FRASE).map(([k,v])=>'<optgroup label="'+esc(typeof v==='string'?v:v.nome)+'">'+AT.FRASES.filter(f=>f.f===k).map(f=>'<option value="'+esc(f.t)+'"'+(f.t===c.frase?' selected':'')+'>'+esc(f.t)+(f.rev?' (revisar)':'')+'</option>').join('')+'</optgroup>').join('');
+  return '<label class="fld"><span>Frases prontas ('+AT.FRASES.length+')</span><select data-fr="1"><option value="">Escolher uma frase pronta…</option>'+g+'</select><small>As marcadas como revisar pedem a sua leitura antes de imprimir.</small></label>';
+}
+const VERPAPEIS=[['verge','Vergê'],['kraft','Kraft'],['matte','Matte'],['vinil','Vinil'],['metal','Azul metálico com vergê colado']];
 function renderPecas(){
   const c=AT.efetiva(st,selPeca),d=c.base;
   const lista=AT.PECAS.map(p=>'<button data-act="peca-sel" data-id="'+p.id+'" aria-pressed="'+(p.id===selPeca)+'">'+esc(p.nome)+'<small>'+fmt(p.w)+' × '+fmt(p.h)+' mm</small></button>').join('');
@@ -144,7 +151,7 @@ function renderPecas(){
    '<div class="pecas-lista" role="group" aria-label="Lista de peças">'+lista+'</div>'+
    '<div class="grid2 e"><div class="card"><h3>'+esc(c.nome)+'</h3>'+
    '<label class="fld"><span>Por que a pessoa guarda</span><input type="text" data-pf="porque" value="'+esc(c.porque||'')+'"></label>'+
-   (d.variantes?'<p class="muted">Esta peça sai em '+d.variantes.length+' versões: '+d.variantes.join(', ')+'.</p>':txt('frase','Frase ou título',2))+
+   (d.variantes?'<p class="muted">Esta peça sai em '+d.variantes.length+' versões: '+d.variantes.join(', ')+'.</p>':txt('frase','Frase ou título',2)+fraseSel(c))+
    txt('sub','Subtítulo',2)+
    (d.linhas&&d.linhas.length?txt('linhas','Linhas (uma por linha)',Math.min(6,d.linhas.length+1),'Itens ou campos da peça.'):'')+
    (d.temEndereco?'<label class="fld"><span>Endereço (opcional)</span><input type="text" data-pf="endereco" value="'+esc(c.endereco||'')+'" placeholder="vazio por padrão"></label>':'')+
@@ -158,26 +165,34 @@ function renderPecas(){
    '<label class="chk"><input type="checkbox" data-pf="fundo"'+(c.fundo?' checked':'')+((c.papel==='matte'||c.papel==='vinil')?'':' disabled')+'> Fundo chapado (só vinil e matte; a arte fica 2,5 mm para dentro)</label>'+
    '<label class="chk"><input type="checkbox" data-pf="idLongo"'+(c.idLongo?' checked':'')+'> Nome completo na identificação</label>'+
    '<div class="barra"><button class="btn" data-act="peca-plano">'+icon('plano')+' Pôr no plano</button><button class="btn sec" data-act="peca-folha">'+icon('corte')+' Ver a folha</button><button class="btn sec" data-act="peca-reset">Restaurar peça</button></div></div>'+
-   '<div><div class="card"><h3>Prévia</h3><div class="pvbox" id="pv"></div><div id="pvinfo" aria-live="polite"></div></div>'+
+   '<div><div class="card"><h3>Prévia</h3><div class="row2"><label class="fld"><span>Ver no papel</span><select data-vp="1">'+VERPAPEIS.map(p=>'<option value="'+p[0]+'"'+((verPapel||c.papel)===p[0]?' selected':'')+'>'+p[1]+(p[0]===c.papel?' (papel da peça)':'')+'</option>').join('')+'</select></label><label class="chk" style="align-self:end"><input type="checkbox" data-vr="1"'+(pvReal?' checked':'')+'> Tamanho real (1 mm = 1 mm na tela)</label></div><div class="pvbox" id="pv"></div><div id="pvinfo" aria-live="polite"></div></div>'+
    '<div class="card"><h3>Papéis permitidos e ferragens</h3><p>'+d.papeis.map(p=>AT.PAPEIS[p].nome).join(', ')+'.</p><p>Ferragens: '+(Object.keys(d.usa||{}).concat(d.manta?['manta magnética (1 folha por folha impressa)']:[]).map(k=>AT.INV_PADRAO.find(i=>i.id===k)?AT.INV_PADRAO.find(i=>i.id===k).nome:k).join(', ')||'nenhuma')+'.</p></div></div></div>';
   updatePv();
 }
 function updatePv(){
-  const c=AT.efetiva(st,selPeca),d=c.base;
+  const c0=AT.efetiva(st,selPeca),d=c0.base;
+  const vp=verPapel||c0.papel;
+  const c=AT.efetivaPapel(st,selPeca,null);
+  let aviso='';
+  if(vp!==c0.papel){
+    c.papel=vp;if(vp==='metal'){c.nfc=false;c.fundo=false;}if(!(vp==='matte'||vp==='vinil'))c.fundo=false;
+    if(!d.papeis.includes(vp))aviso='<p class="muted">Este papel não está entre os indicados para a peça. A prévia é só para comparar.</p>';
+  }
   const pv=$('#pv');if(!pv)return;
   const tam=AT.tamanhoImpresso(c,st.config.borda);
   let html='';
   if(d.variantes){html=d.variantes.map(v=>'<div style="margin-bottom:8px">'+pvHtml(c,{variant:v,w:tam.w,h:tam.h,noBase:false}).html+'</div>').join('');pv.style.flexDirection='column';pv.style.alignItems='center';}
   else{html=pvHtml(c,{w:tam.w,h:tam.h}).html;pv.style.flexDirection='';}
-  pv.innerHTML=html;fitAll();
+  pv.innerHTML=html;if(pvReal)$$('.pvwrap',pv).forEach(w=>{w.dataset.maxs='1';});fitAll();
+  if(pvReal)$$('.pvwrap',pv).forEach(w=>{const wm=+w.dataset.w,hm=+w.dataset.h;w.style.width=(wm*PX)+'px';w.style.height=(hm*PX)+'px';w.firstElementChild.style.transform='none';w.dataset.real='1';});
   const iss=pecaOverflow(c);
   const lay=AT.fit(tam.w,tam.h,st.config.margem);
   $('#pvinfo').innerHTML=(iss.length?'<div class="alerta erro">'+icon('alerta')+'<div>Atenção: '+esc(iss.slice(0,3).join('; '))+'. Reduza o texto ou o tamanho.</div></div>':'<div class="alerta ok">'+icon('ok')+'<div>Tudo dentro da zona segura de 2,5 mm.</div></div>')+
-   '<p class="muted">'+lay.count+' por folha A4 (margem '+st.config.margem+' mm). '+(c.base.fold?'Dobra em '+fmt(c.base.fold)+' mm.':'')+'</p>';
+   '<p class="muted">'+lay.count+' por folha A4 (margem '+st.config.margem+' mm). '+(c.base.fold?'Dobra em '+fmt(c.base.fold)+' mm.':'')+'</p>'+aviso;
 }
 
 /* ---------- 3 Linhas ---------- */
-function pickFrase(fam,k){const l=AT.FRASES.filter(f=>f.f===fam&&!f.pend);return l[k%l.length].t;}
+function pickFrase(fam,k){const l=AT.FRASES.filter(f=>f.f===fam&&!f.rev);return l[k%l.length].t;}
 function aplicarEstiloLinha(id){
   const L=AT.LINHAS[id],cfg=st.linhasCfg[id]||{};
   const sim=cfg.simbolo||L.simbolo,tin=cfg.tinta||L.tinta,fam=cfg.frase||L.frase;
@@ -302,7 +317,38 @@ function efetivaPapel(pecaId,papel){
 function roteiroHtml(cuts,pilha){
   return '<ol class="roteiro">'+AT.roteiro(cuts,pilha).map(r=>r.grupo?'<li class="g">'+esc(r.grupo)+'</li>':r.aviso?'<li class="av">'+esc(r.txt)+'</li>':'<li><b class="n">'+r.n+'</b><span>'+esc(r.txt)+'</span></li>').join('')+'</ol>';
 }
+function kitSel(){
+  const L=AT.LINHAS[selKit.linha];
+  const ids=Object.keys(L.pecas).filter(id=>{const b=AT.pecaDef(id);return b.papeis.includes(selKit.papel)&&selKit.papel!=='metal'&&!b.manta&&!b.fold;});
+  const itens=ids.map((id,i)=>({idx:i,c:AT.efetivaPapel(st,id,selKit.papel),n:L.pecas[id]}));
+  const units=[];itens.forEach(it=>{for(let i=0;i<it.n;i++)units.push({k:it.c.id,pecaId:it.c.id,idx:it.idx,w:it.c.w,h:it.c.h,variant:(it.c.base.variantes||[null])[i%((it.c.base.variantes||[1]).length)]});});
+  let packed=[];
+  if(units.length)try{packed=AT.packKit(units,st.config.margem);}catch(e){packed=[];}
+  const folhas=packed.map(ps=>{const fill=AT.fillBand(ps.cells,st.config.margem,selKit.papel);return {paper:selKit.papel,cells:ps.cells,fill,cuts:AT.cuts(ps.cells.concat(fill),'h')};});
+  return {itens,folhas,plano:{itens,kit:{folhas}}};
+}
+G.AT.kitDaLinha=kitSel;
+function renderFolhaKit(){
+  const cfg=st.config,K=kitSel();
+  const pl=AT.calcPlano(st);
+  const papeisOk=['verge','kraft','matte','vinil'];
+  const ecoTxt=pl.kit.economia>0?'<div class="alerta ok">'+icon('ok')+'<div>No plano atual, a folha-kit economiza <b>'+pl.kit.economia+'</b> '+(pl.kit.economia===1?'folha':'folhas')+' ('+pl.kit.detalhe.map(d=>esc(d.pecas.join(' + '))+': '+d.antes+' → '+d.depois).join('; ')+').</div></div>':'<div class="alerta info">'+icon('info')+'<div>O plano atual não tem sobras que caibam juntas numa folha só. Não há economia de folhas por enquanto.</div></div>';
+  let sheets='',rot='';
+  K.folhas.forEach((f,i)=>{
+    const r=AT.sheetKit(st,K.plano,f);
+    sheets+='<div class="sheetwrap">'+r.html+'</div>';
+    rot+='<h3>Folha-kit '+(i+1)+' de '+K.folhas.length+'</h3>'+roteiroHtml(f.cuts,cfg.pilha);
+  });
+  $('#tab-folhas').innerHTML='<h2>Folhas e corte</h2>'+modoBar()+'<p>A folha-kit junta peças diferentes da mesma linha e do mesmo papel numa A4 só. Primeiro os cortes horizontais separam as faixas. Depois cada faixa leva os cortes verticais.</p>'+
+   '<div class="grid2 e"><div><div class="card"><div class="row2"><label class="fld"><span>Linha</span><select data-fk="linha">'+Object.entries(AT.LINHAS).map(([k,l])=>'<option value="'+k+'"'+(k===selKit.linha?' selected':'')+'>'+esc(l.nome)+'</option>').join('')+'</select></label>'+
+   '<label class="fld"><span>Papel</span><select data-fk="papel">'+papeisOk.map(p=>'<option value="'+p+'"'+(p===selKit.papel?' selected':'')+'>'+AT.PAPEIS[p].nome+'</option>').join('')+'</select></label></div>'+
+   '<p class="muted">Peças desta linha neste papel: '+(K.itens.map(i=>i.n+'× '+esc(i.c.nome)).join(', ')||'nenhuma')+'.</p></div>'+ecoTxt+
+   (K.folhas.length?'<div class="kpis"><div class="kpi"><b>'+K.folhas.length+'</b><span>folha(s) para 1 kit</span></div><div class="kpi"><b>'+K.folhas.reduce((a,f)=>a+f.cuts.total,0)+'</b><span>cortes no total</span></div></div><div class="barra"><button class="btn" data-act="kit-print">'+icon('print')+' Imprimir esta folha-kit</button></div><div class="card"><h3>Roteiro de corte</h3>'+rot+'</div>':'<div class="alerta info">'+icon('info')+'<div>Nenhuma peça desta linha usa este papel. Escolha outro papel.</div></div>')+'</div>'+
+   '<div><h3>Folha A4 · '+esc(AT.PAPEIS[selKit.papel].nome)+'</h3><div class="sheetlist">'+(sheets||'<p class="muted">Sem folha.</p>')+'</div></div></div>';
+}
+function modoBar(){return '<div class="barra" role="group" aria-label="Modo"><button class="btn sec" data-act="fo-modo" data-m="peca" aria-pressed="'+(selFolhaModo==='peca')+'">Uma peça por folha</button><button class="btn sec" data-act="fo-modo" data-m="kit" aria-pressed="'+(selFolhaModo==='kit')+'">Folha-kit</button></div>';}
 function renderFolhas(){
+  if(selFolhaModo==='kit'){renderFolhaKit();return;}
   const cfg=st.config;
   if(!AT.pecaDef(selFolha.pecaId))selFolha.pecaId='cartao';
   const c=efetivaPapel(selFolha.pecaId,selFolha.papel);
@@ -317,23 +363,28 @@ function renderFolhas(){
     extra='<div class="card"><h3>Azul metálico: base e gabarito de colagem</h3><p>O azul não vai à impressora. Corte as bases de '+fmt(c.w)+' × '+fmt(c.h)+' mm ('+lb.count+' por folha) e cole o vergê impresso por cima, deixando '+fmt(cfg.borda)+' mm de borda azul. Nunca coloque NFC sobre o azul.</p><div class="sheetlist"><div class="sheetwrap">'+g.html+'</div></div><h3>Roteiro de corte da base azul</h3>'+roteiroHtml(lb.cuts,cfg.pilha)+'</div>';
   }
   const stacks=Math.ceil(1/cfg.pilha);
-  $('#tab-folhas').innerHTML='<h2>Folhas e corte</h2><p>As peças ficam coladas, sem espaço entre elas. O papel é o fundo. Só cortes retos de ponta a ponta.</p>'+
+  $('#tab-folhas').innerHTML='<h2>Folhas e corte</h2>'+modoBar()+'<p>As peças ficam coladas, sem espaço entre elas. O papel é o fundo. Só cortes retos de ponta a ponta.</p>'+
    '<div class="grid2 e"><div><div class="card"><div class="row2"><label class="fld"><span>Peça</span><select data-fo="pecaId">'+AT.PECAS.map(p=>'<option value="'+p.id+'"'+(p.id===selFolha.pecaId?' selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</select></label>'+
    '<label class="fld"><span>Papel</span><select data-fo="papel">'+opts(permit,c.papel)+'</select></label></div>'+
    '<div class="row2"><label class="fld"><span>Margem (mm)</span><input type="number" min="6" max="20" step="0.5" data-cfg="margem" value="'+cfg.margem+'"></label>'+
    '<label class="fld"><span>Folhas por pilha</span><input type="number" min="5" max="8" step="1" data-cfg="pilha" value="'+cfg.pilha+'"></label></div>'+
    '<div class="row2"><label class="fld"><span>Borda azul (mm)</span><input type="number" min="2" max="6" step="0.5" data-cfg="borda" value="'+cfg.borda+'"></label>'+
    '<label class="chk" style="align-self:end"><input type="checkbox" data-cfg="guias"'+(cfg.guias?' checked':'')+'> Linhas-guia internas</label></div></div>'+
-   '<div class="kpis"><div class="kpi"><b>'+(lay?lay.count:0)+'</b><span>peças por folha ('+(lay?esc(lay.desc):'')+')</span></div><div class="kpi"><b>'+(lay?lay.cuts.total:0)+'</b><span>cortes por pilha</span></div><div class="kpi"><b>'+fmt(tam.w)+'×'+fmt(tam.h)+'</b><span>mm impressos</span></div></div>'+
+   '<div class="kpis"><div class="kpi"><b>'+(lay?lay.count:0)+'</b><span>peças por folha ('+(lay?esc(lay.desc):'')+')</span></div><div class="kpi"><b>'+(lay?lay.cutsAll.total:0)+'</b><span>cortes por pilha</span></div><div class="kpi"><b>'+fmt(tam.w)+'×'+fmt(tam.h)+'</b><span>mm impressos</span></div></div>'+
    (r.warn.length?'<div class="alerta erro">'+icon('alerta')+'<div>'+esc(r.warn.slice(0,3).join('; '))+'</div></div>':'')+
    '<div class="barra"><button class="btn" data-act="folha-print">'+icon('print')+' Imprimir esta folha</button></div>'+
-   '<div class="card"><h3>Roteiro de corte</h3>'+(lay&&lay.count?roteiroHtml(lay.cuts,cfg.pilha):'<p>Não cabe na A4.</p>')+
+   '<div class="card"><h3>Roteiro de corte</h3>'+(lay&&lay.count?(lay.fill.length?'<p class="muted">A faixa livre embaixo leva '+lay.fill.length+' '+(c.papel==='vinil'?'etiquetas de caixa de remédio':'mini-cartões com QR')+'.</p>':'')+roteiroHtml(lay.cutsAll,cfg.pilha):'<p>Não cabe na A4.</p>')+
    (c.base.fold?'<p><b>Dobra:</b> marcada com traço tracejado curto na margem, em '+fmt(c.base.fold)+' mm a partir da borda da peça.</p>':'')+'</div></div>'+
    '<div><h3>Folha A4 · '+esc(AT.PAPEIS[c.papel==='metal'?'verge':c.papel].nome)+'</h3><div class="sheetlist"><div class="sheetwrap">'+r.html+'</div></div><p class="muted">Marcas de corte só nas margens, com a medida em mm a partir da borda da folha. A régua de 100 mm no topo serve para conferir a impressão.</p></div></div>'+extra;
 }
 
 /* ---------- 6 Imprimir ---------- */
 function printData(){
+  if(printSel.kit){
+    const K=kitSel(),pl=AT.calcPlano(st),outs=[],infos=[],warns=[];
+    K.folhas.forEach(f=>{const r=AT.sheetKit(st,K.plano,f);outs.push(r.html);infos.push(r.info);r.warn.forEach(w=>warns.push(w));});
+    return {pl,tmp:st,out:{html:outs.join(''),infos,warns}};
+  }
   if(printSel.single){
     const c=efetivaPapel(printSel.single.pecaId,printSel.single.papel);
     const tam=AT.tamanhoImpresso(c,st.config.borda),lay=AT.fit(tam.w,tam.h,st.config.margem);
@@ -353,7 +404,7 @@ function renderImprimir(){
    '<div class="alerta info">'+icon('info')+'<div>Se a HP não aparecer na lista, adicione a impressora nas configurações do sistema antes.</div></div>'+
    '<div class="card"><h3>Ordem de impressão</h3><ul class="lista">'+(notas||'<li>Plano vazio.</li>')+'</ul>'+
    '<p class="muted">Primeiro imprima uma folha e meça a régua de 100 mm no topo. A manta magnética e o azul metálico nunca entram na impressora.</p></div>'+
-   '<div class="barra">'+(printSel.single?'<button class="btn sec" data-act="print-fila">Voltar para a fila do plano</button>':'')+
+   '<div class="barra">'+((printSel.single||printSel.kit)?'<button class="btn sec" data-act="print-fila">Voltar para a fila do plano</button>':'')+
    '<button class="btn sec" data-act="print-group" data-p="" aria-pressed="'+(!printSel.papel)+'">Tudo ('+pl.folhasTotal+' folhas)</button>'+grupos+'</div>'+
    '<div class="barra"><button class="btn" data-act="print-go" id="btn-print">'+icon('print')+' Imprimir '+d.out.infos.length+' folhas</button></div>'+
    (d.out.warns.length?'<div class="alerta erro">'+icon('alerta')+'<div>'+esc(d.out.warns.slice(0,3).join('; '))+'</div></div>':'')+'</div>'+
@@ -378,7 +429,7 @@ function diaMatch(l,d){
 function renderDistrib(){
   const all=Array.isArray(G.LOCAIS)?G.LOCAIS:[];
   const bairros=[...new Set(all.map(l=>l.bairro).filter(Boolean))].sort();
-  const list=all.filter(l=>(!dist.bairro||l.bairro===dist.bairro)&&(!dist.publico||(l.publico||[]).includes(dist.publico))&&diaMatch(l,dist.dia));
+  const list=all.filter(l=>(!dist.bairro||l.bairro===dist.bairro)&&(!dist.publico||AT.locaisDoPublico(dist.publico,'').includes(l))&&diaMatch(l,dist.dia));
   const tot=Object.values(st.distrib).reduce((a,x)=>a+(Number(x.qtd)||0),0);
   const feitos=all.filter(l=>st.distrib[locKey(l)]&&st.distrib[locKey(l)].feito).length;
   const cards=list.map(l=>{
@@ -397,6 +448,18 @@ function renderDistrib(){
    '<label class="fld"><span>Público</span><select data-dist="publico"><option value="">Todos</option>'+Object.entries(AT.PUBLICOS).map(([k,v])=>'<option value="'+k+'"'+(k===dist.publico?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
    '<label class="fld"><span>Dia</span><select data-dist="dia"><option value="">Qualquer</option>'+DIAS.map(d=>'<option value="'+d[0]+'"'+(d[0]===dist.dia?' selected':'')+'>'+d[1]+'</option>').join('')+'</select></label>'+
    '<div class="kpis"><div class="kpi"><b>'+feitos+'/'+all.length+'</b><span>locais visitados</span></div><div class="kpi"><b>'+tot+'</b><span>peças entregues</span></div><div class="kpi"><b>'+list.length+'</b><span>no filtro</span></div></div></div>'+cards;
+}
+
+/* ---------- Estratégia ---------- */
+function renderEstrategia(){
+  st.estrategia=Object.assign({check:{},placar:{},link:'',pub:'',bairro:''},st.estrategia||{});
+  $('#tab-estrategia').innerHTML=AT.estrategiaHtml(st,{icon});
+}
+function copiar(txt){
+  const ok=()=>{const m=$('#estr-copiado');if(m)m.textContent='Texto copiado.';};
+  const fb=()=>{const t=$('#estr-texto');if(t){t.focus();t.select();try{D.execCommand('copy');ok();}catch(e){const m=$('#estr-copiado');if(m)m.textContent='Selecione e copie o texto.';}}};
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,fb);return;}}catch(e){}
+  fb();
 }
 
 /* ---------- 8 Projeto ---------- */
@@ -424,7 +487,7 @@ function onClick(e){
    case 'inv-reset':st.inventario=clone(AT.INV_PADRAO);save();renderInventario();break;
    case 'peca-sel':selPeca=t.dataset.id;renderPecas();break;
    case 'peca-plano':{st.plano.itens.push({pecaId:selPeca,qtd:10});save();showTab('plano');break;}
-   case 'peca-folha':selFolha={pecaId:selPeca,papel:null};showTab('folhas');break;
+   case 'peca-folha':selFolhaModo='peca';selFolha={pecaId:selPeca,papel:null};showTab('folhas');break;
    case 'peca-reset':delete st.pecas[selPeca];save();renderPecas();break;
    case 'linha-sel':selLinha=t.dataset.id;renderLinhas();break;
    case 'linha-aplicar':aplicarEstiloLinha(selLinha);st.linhaAtiva=selLinha;st.plano.itens=AT.itensDaLinha(selLinha,st.kits);save();showTab('plano');break;
@@ -437,6 +500,21 @@ function onClick(e){
     const A=AT.assistente($('#as-pub').value,Math.max(1,+$('#as-n').value||1),$('#as-oc').value);A.pessoas=Math.max(1,+$('#as-n').value||1);lastAss=A;$('#as-out').innerHTML=assOut(A);break;}
    case 'as-usar':if(lastAss){aplicarEstiloLinha(lastAss.linha);st.linhaAtiva=lastAss.linha;st.kits=lastAss.kits;st.plano.itens=clone(lastAss.itens);save();renderPl();}break;
    case 'folha-print':printSel={papel:null,single:{pecaId:selFolha.pecaId,papel:selFolha.papel}};showTab('imprimir');break;
+   case 'fo-modo':selFolhaModo=t.dataset.m;renderFolhas();fitAll();break;
+   case 'kit-print':printSel={papel:null,single:null,kit:true};showTab('imprimir');break;
+   case 'estr-pub':st.estrategia.pub=t.dataset.p;st.estrategia.confirma='';save();renderEstrategia();break;
+   case 'estr-copiar':copiar($('#estr-texto').value);break;
+   case 'estr-dist':dist.publico=t.dataset.p;dist.bairro=st.estrategia.bairro||'';dist.dia='';showTab('distribuicao');break;
+   case 'estr-linha':
+    if(st.estrategia.confirma===t.dataset.p){aplicarEstiloLinha(t.dataset.l);st.linhaAtiva=t.dataset.l;st.plano.itens=AT.itensDaLinha(t.dataset.l,st.kits);st.estrategia.confirma='';save();showTab('plano');}
+    else{st.estrategia.confirma=t.dataset.p;renderEstrategia();}
+    break;
+   case 'estr-puxar':{
+    const tot=Object.values(st.distrib||{}).reduce((a,x)=>a+(Number(x.qtd)||0),0),P=st.estrategia.placar;
+    let usado=0;for(let i=0;i<8;i++)usado+=Number((P['w'+i]||{}).ent)||0;
+    const livre=Math.max(0,tot-usado);
+    for(let i=0;i<8;i++){const r=P['w'+i]=P['w'+i]||{};if(!(Number(r.ent)>0)){r.ent=livre;break;}}
+    save();renderEstrategia();break;}
    case 'print-go':G.print();break;
    case 'print-group':printSel.papel=t.dataset.p||null;renderImprimir();fitAll();break;
    case 'print-fila':printSel={papel:null,single:null};renderImprimir();fitAll();break;
@@ -476,6 +554,16 @@ function onInput(e){
     if(k==='pilha')st.config.pilha=Math.max(5,Math.min(8,Math.round(st.config.pilha)||6));
     if(k==='borda')st.config.borda=Math.max(2,Math.min(6,st.config.borda||3));
     save();renderFolhas();fitAll();
+  }else if(el.dataset.estr){
+    const k=el.dataset.estr;st.estrategia[k]=el.value;save();
+    if(k==='bairro'&&e.type==='change')renderEstrategia();
+    if(k==='link'){const t=$('#estr-texto');if(t)t.value=AT.TEXTO_AVALIACAO.replace('[LINK]',el.value||'[LINK]');}
+  }else if(el.dataset.estrCk){st.estrategia.check[el.dataset.estrCk]=el.checked;save();
+  }else if(el.dataset.pl!==undefined){const P=st.estrategia.placar;const r=P['w'+el.dataset.pl]=P['w'+el.dataset.pl]||{};r[el.dataset.f]=Math.max(0,Math.floor(+el.value)||0);save();AT.atualizaPlacar(st,$('#tab-estrategia'));
+  }else if(el.dataset.fr&&e.type==='change'){if(el.value){pecaField(selPeca,'frase',el.value);renderPecas();}
+  }else if(el.dataset.vp&&e.type==='change'){verPapel=el.value;updatePv();
+  }else if(el.dataset.vr&&e.type==='change'){pvReal=el.checked;updatePv();
+  }else if(el.dataset.fk&&e.type==='change'){selKit[el.dataset.fk]=el.value;renderFolhas();fitAll();
   }else if(el.dataset.fo&&e.type==='change'){
     if(el.dataset.fo==='pecaId')selFolha={pecaId:el.value,papel:null};else selFolha.papel=el.value;
     renderFolhas();fitAll();
